@@ -1,0 +1,45 @@
+{
+  "name": "conclavia-onboarding-avatar",
+  "version": "0.1.0",
+  "private": true,
+  "engines": {
+    "node": ">=22.21.1"
+  },
+  "scripts": {
+    "dev": "next dev -p 3002",
+    "build": "next build",
+    "start": "next start -p 3002",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test tests/*.test.ts",
+    "test:e2e": "playwright test",
+    "setup:local": "node scripts/setup-local.mjs",
+    "seed": "tsx --env-file=.env.local scripts/seed.ts",
+    "test:aihat": "tsx --test tests/aihat-contract.test.mjs",
+    "test:handoff": "playwright test --config playwright.handoff.config.ts",
+    "check:avatar-kit": "npm --prefix ../conclavia-avatar-kit run check:consumers"
+  },
+  "dependencies": {
+    "mongoose": "8.24.2",
+    "next": "16.3.0",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "three": "^0.185.1",
+    "@conclavia/avatar-kit": "file:../conclavia-avatar-kit"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.63.0",
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@types/three": "^0.185.4",
+    "eslint": "^9.0.0",
+    "eslint-config-next": "16.3.0",
+    "tsx": "^4.20.5",
+    "typescript": "5.9.3"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/vgflutter/conclavia-onboarding-avatar.git"
+  }
+}
