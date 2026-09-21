@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { BusinessAvatar } from './BusinessAvatar';
 import { defaultAvatar, exampleFlow } from '@/lib/onboarding/example';
 import { AVATAR_VOICES } from '@/lib/avatar-voice-catalog';
-import { AVATAR_APPEARANCES } from '@conclavia/avatar-kit/lib/avatar-catalog';
+import { avatarAppearanceForStyle, avatarAppearancesForStyle } from '@conclavia/avatar-kit/lib/avatar-catalog';
 import { ASSISTANT_VISUAL_STYLES } from '@conclavia/avatar-kit/types/assistant-profile';
 import { avatarVisualStyleLabel } from '@conclavia/avatar-kit/lib/avatar-visual-style';
 import type { Site } from '@/lib/onboarding/types';
@@ -95,8 +95,8 @@ export function Studio() {
         <div className="workspace"><section className="card stack">
           {tab === 'avatar' && <><div><div className="eyebrow">Il volto del tuo servizio</div><h2>Piacere di conoscerti.</h2><p>Scegli come si presenta e come parla il tuo assistente.</p></div>
             <label>Nome dell’avatar<input value={draft.avatar.name} maxLength={80} onChange={e => setDraft({ ...draft, avatar: { ...draft.avatar, name: e.target.value } })} /></label>
-            <label>Stile visivo</label><div className="style-options">{ASSISTANT_VISUAL_STYLES.map(value => <button className={draft.avatar.visualStyle === value ? 'selected' : ''} key={value} onClick={() => setDraft({ ...draft, avatar: { ...draft.avatar, visualStyle: value } })}>{avatarVisualStyleLabel(value, true)}</button>)}</div>
-            <div className="fields"><label>Personaggio<select value={draft.avatar.appearance} onChange={e => setDraft({ ...draft, avatar: { ...draft.avatar, appearance: e.target.value as Site['avatar']['appearance'] } })}>{AVATAR_APPEARANCES.map(avatar => <option key={avatar.id} value={avatar.id}>{avatar.labels.it}</option>)}</select></label>
+            <label>Stile visivo</label><div className="style-options">{ASSISTANT_VISUAL_STYLES.map(value => <button className={draft.avatar.visualStyle === value ? 'selected' : ''} key={value} onClick={() => setDraft({ ...draft, avatar: { ...draft.avatar, visualStyle: value, appearance: avatarAppearanceForStyle(draft.avatar.appearance, value) } })}>{avatarVisualStyleLabel(value, true)}</button>)}</div>
+            <div className="fields"><label>Personaggio<select value={draft.avatar.appearance} onChange={e => setDraft({ ...draft, avatar: { ...draft.avatar, appearance: e.target.value as Site['avatar']['appearance'] } })}>{avatarAppearancesForStyle(draft.avatar.visualStyle).map(avatar => <option key={avatar.id} value={avatar.id}>{avatar.labels.it}</option>)}</select></label>
               <label>Velocità della voce<input type="number" min="0.8" max="1.2" step="0.05" value={draft.avatar.speakingRate} onChange={e => setDraft({ ...draft, avatar: { ...draft.avatar, speakingRate: Number(e.target.value) } })} /></label></div>
             <div className="fields">{(['it', 'en'] as const).map(locale => <label key={locale}>{locale === 'it' ? 'Voce italiana' : 'Voce inglese'}<select value={locale === 'it' ? draft.avatar.voiceIt : draft.avatar.voiceEn} onChange={e => setDraft({ ...draft, avatar: { ...draft.avatar, [locale === 'it' ? 'voiceIt' : 'voiceEn']: e.target.value } })}>{AVATAR_VOICES.filter(v => v.language === locale).map(v => <option key={v.id} value={v.id}>{v.name} · {v.gender === 'male' ? 'M' : 'F'}</option>)}</select></label>)}</div>
           </>}

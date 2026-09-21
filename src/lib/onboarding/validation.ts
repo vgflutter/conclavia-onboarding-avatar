@@ -1,5 +1,5 @@
 import type { Answer, Answers, Field, Flow, Avatar } from './types';
-import { isAvatarAppearance } from '@conclavia/avatar-kit/lib/avatar-catalog';
+import { isAvatarAppearance, isAvatarAppearanceSupported } from '@conclavia/avatar-kit/lib/avatar-catalog';
 import { isAvatarVisualStyle } from '@conclavia/avatar-kit/lib/avatar-visual-style';
 
 export class InputError extends Error {
@@ -143,6 +143,7 @@ export function validateFlow(value: unknown): Flow {
 export function validateAvatar(value: unknown): Avatar {
   if (!record(value)) throw new InputError('Avatar non valido');
   if (!isAvatarAppearance(value.appearance) || !isAvatarVisualStyle(value.visualStyle)) throw new InputError('Aspetto non valido');
+  if (!isAvatarAppearanceSupported(value.appearance, value.visualStyle)) throw new InputError('Personaggio non disponibile in questo stile');
   if (typeof value.speakingRate !== 'number' || value.speakingRate < .8 || value.speakingRate > 1.2) throw new InputError('Velocità non valida');
   return { name: text(value.name, 'nome', 80), appearance: value.appearance as Avatar['appearance'],
     visualStyle: value.visualStyle as Avatar['visualStyle'], voiceIt: text(value.voiceIt, 'voce italiana', 120),

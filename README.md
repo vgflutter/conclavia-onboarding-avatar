@@ -38,7 +38,7 @@ Per collegare AIHat configurare le tre variabili `CONCLAVIA_ONBOARDING_URL`, `CO
 ## Cosa è implementato
 
 - Studio con siti, avatar, voci, contesto, origini consentite e percorsi JSON versionati.
-- Tre renderer condivisi: editoriale 2D, ritratto 2.5D, personaggio 3D. Labiale e audio in streaming tramite Inworld.
+- Tre renderer condivisi: editoriale 2D, ritratto 2.5D, personaggio 3D. Quattro identità e otto combinazioni supportate: i due nuovi ritratti fotografici Studio sono disponibili nel 2.5D; il catalogo e il server impediscono combinazioni prive di asset. Labiale e audio in streaming tramite Inworld.
 - Microfono WebRTC con turni automatici e interruzione della voce dell’avatar; trascrizione OpenAI, estrazione delle risposte con schema strutturato e validazione server. Campi e testo disponibili anche senza microfono.
 - Webcam opzionale con sola anteprima locale: nessuna analisi visiva del cliente, registrazione o invio del video.
 - Domande condizionali, correzioni, campi facoltativi, riepilogo, conferma esplicita, ripresa autorizzata e isolamento tra siti/clienti.
@@ -47,6 +47,8 @@ Per collegare AIHat configurare le tre variabili `CONCLAVIA_ONBOARDING_URL`, `CO
 Lo studio e l’interfaccia cliente sono inizialmente in italiano. Gli schemi supportano anche contenuti e voce inglesi; la localizzazione completa dell’interfaccia resta da fare.
 
 ## Avatar: un solo sorgente
+
+La [review del 21 settembre](https://github.com/vgflutter/conclavia-avatar-kit/blob/main/docs/reviews/2026-09-21-production.md) documenta dieci cicli per famiglia e i limiti residui. Include nuovi ritratti fotografici, labiale/palpebre/dita rivisti e recupero dei renderer dopo errori. La variante ceramica 3D non ha superato la review e resta esclusa dalla selezione. Next è aggiornato a 16.3.5; i GLB condivisi usano ETag/304.
 
 Il progetto [conclavia-avatar-kit](https://github.com/vgflutter/conclavia-avatar-kit/blob/main/README.md) contiene componenti, animazioni, modelli, ritratti, catalogo voci e player. Meeting e Onboarding lo importano tramite `@conclavia/avatar-kit`; i precedenti percorsi negli applicativi sono piccoli re-export di compatibilità. Una modifica al kit viene usata da entrambi i dev server. Sono incluse anche le ultime correzioni di Meeting alle spalle e al gomito del 2D. Con entrambi i consumer installati, `npm run check:avatar-kit` verifica il collegamento effettivo e l’assenza di copie locali.
 
@@ -64,6 +66,8 @@ npm run test:e2e
 npm run test:aihat
 npm run test:handoff
 ```
+
+Verifica del 21 settembre: **12 test unitari e 5 flussi browser passati**, inclusi i due ritratti Studio e la rivalidazione GLB 304; lint, TypeScript e build Next 16.3.5 passati. Il nuovo selettore della select è stato corretto prima del rerun completo. [Risultati del kit e limiti](https://github.com/vgflutter/conclavia-meeting-avatar/blob/main/docs/avatar-kit-review-2026-09-21.md).
 
 I test browser del servizio usano la porta **3103** e `.next-e2e`, separati dal normale dev server 3002. La prova AIHat aggiunge il frontend 3114 e un backend sintetico 3115. Non eseguire le due suite browser Onboarding contemporaneamente.
 

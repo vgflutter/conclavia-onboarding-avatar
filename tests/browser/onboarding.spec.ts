@@ -87,8 +87,24 @@ test('studio and shared avatar assets render without duplicate React instances',
   await page.getByRole('button', { name: 'Personaggio 3D', exact: true }).click();
   await expect(page.locator('canvas')).toBeVisible();
   const model = await request.get('/avatars/rigged-v1/male.glb'); expect(model.ok()).toBeTruthy(); expect((await model.body()).length).toBeGreaterThan(1_000_000);
+  expect((await request.get('/avatars/rigged-v1/male.glb', { headers: { 'If-None-Match': model.headers().etag } })).status()).toBe(304);
   expect((await request.get('/avatars/rigged-v1/unknown.glb')).status()).toBe(404);
   await page.getByRole('button', { name: 'Ritratto 2.5D', exact: true }).click(); await expect(page.locator('canvas')).toBeVisible();
+  const appearance = page.getByRole('combobox', { name: /^Personaggio/ });
+  await expect(appearance.locator('option')).toHaveCount(4);
+  const italianVoice = await page.getByRole('combobox', { name: /^Voce italiana/ }).inputValue();
+  for (const identity of ['portrait_natural_male', 'portrait_natural_female']) {
+    await appearance.selectOption(identity);
+    await expect(page.getByTestId('avatar-portrait')).toHaveAttribute('data-appearance', identity);
+    await expect(page.getByTestId('portrait-canvas')).toHaveAttribute('data-renderer-ready', 'true');
+  }
+  await page.getByRole('button', { name: 'Personaggio 3D', exact: true }).click();
+  await expect(appearance).toHaveValue('business_clay_female');
+  await expect(appearance.locator('option')).toHaveCount(2);
+  await expect(page.getByRole('combobox', { name: /^Voce italiana/ })).toHaveValue(italianVoice);
+  await page.getByRole('button', { name: 'Ritratto 2.5D', exact: true }).click();
+  await appearance.selectOption('portrait_natural_female');
+  await expect(page.getByTestId('portrait-canvas')).toHaveAttribute('data-renderer-ready', 'true');
   await page.screenshot({ path: 'test-results/studio.png', fullPage: true });
   expect(errors).toEqual([]);
 });
