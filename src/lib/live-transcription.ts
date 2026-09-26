@@ -3,6 +3,7 @@ type Transcript = { id: string; text?: string; questionId: string; failed?: bool
 export class TranscriptQueue {
   private items: Transcript[] = [];
   private seen = new Set<string>();
+  discardPending() { this.items = []; }
   start(id: string, questionId: string) {
     if (this.seen.has(id)) return;
     this.seen.add(id);
@@ -21,11 +22,14 @@ export type LiveConnection = { stop: () => void; mute: (value: boolean) => void 
 export async function startTranscription(options: {
   signal: AbortSignal; negotiate: (sdp: string) => Promise<string>; question: () => string;
   onText: (text: string, questionId: string, id: string) => void;
-  onPartial: (text: string) => void; onSpeech: () => void; onError: (message: string) => void;
+  onPartial: (text: string) => void; onSpeech: () => void; onSpeechEnd?: () => void; onError: (message: string) => void;
 }): Promise<LiveConnection> {
   const peer = new RTCPeerConnection();
   let stream: MediaStream | undefined;
   let closed = false;
+  let muted = false;
+  let generation = 0;
+  const turns = new Map<string, number>();
   const queue = new TranscriptQueue();
   const partials = new Map<string, string>();
   const stop = () => {
@@ -47,14 +51,23 @@ export async function startTranscription(options: {
       try {
         const data = JSON.parse(event.data);
         if (data.type === 'input_audio_buffer.speech_started') {
-          queue.start(data.item_id, options.question()); options.onSpeech();
+          if (!muted) {
+            turns.set(data.item_id, generation);
+            queue.start(data.item_id, options.question()); options.onSpeech();
+          }
         }
-        if (data.type === 'conversation.item.input_audio_transcription.delta') {
+        const activeTurn = !muted && turns.get(data.item_id) === generation;
+        if (activeTurn && data.type === 'conversation.item.input_audio_transcription.delta') {
           partials.set(data.item_id, (partials.get(data.item_id) || '') + (data.delta || ''));
           options.onPartial(partials.get(data.item_id) || '');
         }
-        if (data.type === 'conversation.item.input_audio_transcription.completed' || data.type === 'conversation.item.input_audio_transcription.failed') {
-          partials.delete(data.item_id); options.onPartial('');
+        if (activeTurn && (data.type === 'conversation.item.input_audio_transcription.completed' || data.type === 'conversation.item.input_audio_transcription.failed')) {
+          turns.delete(data.item_id);
+          partials.delete(data.item_id);
+          // A slower earlier turn must not clear captions or speaking state for a
+          // newer utterance that is still being transcribed.
+          options.onPartial([...partials.values()].at(-1) ?? '');
+          if (!turns.size) options.onSpeechEnd?.();
           for (const item of queue.finish(data.item_id, data.transcript, options.question())) {
             if (item.failed) options.onError('Non ho ricevuto la trascrizione. Ripeti la risposta o usa i campi.');
             else if (item.text?.trim()) options.onText(item.text.trim(), item.questionId, item.id);
@@ -83,6 +96,10 @@ export async function startTranscription(options: {
       if (channel.readyState === 'open') { cleanup(); resolve(); }
       if (options.signal.aborted) abort();
     });
-    return { stop, mute: value => stream?.getAudioTracks().forEach(track => { track.enabled = !value; }) };
+    return { stop, mute: value => {
+      muted = value; generation++; turns.clear(); partials.clear(); queue.discardPending(); options.onPartial('');
+      stream?.getAudioTracks().forEach(track => { track.enabled = !value; });
+      if (value && channel.readyState === 'open') channel.send(JSON.stringify({ type: 'input_audio_buffer.clear' }));
+    } };
   } catch (error) { stop(); throw error; }
 }

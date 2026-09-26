@@ -1,11 +1,14 @@
 import { collections } from '@/lib/onboarding/db';
 import { budget, createSession, mutate, sessionForRequest, siteForRequest } from '@/lib/onboarding/sessions';
-import { applyInterpretation, confirm, publicSession, setAnswer } from '@/lib/onboarding/engine';
+import { applyInterpretation, confirm, confirmAnswer, publicSession, setAnswer } from '@/lib/onboarding/engine';
 import { errorResponse, hash, jsonBody, sameOrigin } from '@/lib/onboarding/security';
 import { baseUrl, token } from '@/lib/onboarding/security';
 import { InputError, record, text } from '@/lib/onboarding/validation';
 import { interpret } from '@/lib/onboarding/intelligence';
+import { transcriptionConnection } from '@/lib/onboarding/realtime';
 import { inworldSpeechResponse } from '@/lib/inworld-tts';
+import { auditedMutation, buildClientAudit, parseClientAudit, writeAudit } from '@/lib/onboarding/audit';
+import type { Interpretation } from '@/lib/onboarding/types';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -52,7 +55,7 @@ export async function POST(req: Request, context: Context) {
     }
     sameOrigin(req);
     const session = await sessionForRequest(req, sessionId);
-    const body = await jsonBody(req, action === 'realtime' ? 32_000 : 16_000);
+    const body = await jsonBody(req, action === 'realtime' ? 32_000 : action === 'events' ? 18_000 : 16_000);
     if (!record(body)) throw new InputError('Richiesta non valida');
     if (action === 'consent') {
       if (body.accept !== true) throw new InputError('Conferma necessaria per continuare');
@@ -60,17 +63,29 @@ export async function POST(req: Request, context: Context) {
         s => ({ ...s, consentAt: s.consentAt || new Date().toISOString() })));
     }
     if (!session.consentAt) throw new InputError('Conferma prima la modalità di trattamento', 403);
+    if (action === 'events') {
+      const result = await writeAudit(session, buildClientAudit(session, parseClientAudit(body)));
+      if (result === 'limited') throw new InputError('Troppi eventi. Riprova più tardi.', 429);
+      return Response.json({ ok: true }, { status: 202 });
+    }
     if (session.status === 'completed') throw new InputError('Sessione già confermata', 409);
-    if (action === 'answer') return Response.json(await mutate(session, body.revision, body.operationId,
-      s => setAnswer(s, text(body.questionId, 'domanda', 80), body.value, body.skip === true)));
+    if (action === 'answer') return Response.json(await auditedMutation(session, 'answer', () => mutate(session, body.revision, body.operationId,
+      s => setAnswer(s, text(body.questionId, 'domanda', 80), body.value, body.skip === true))));
+    if (action === 'confirm-answer') {
+      if (typeof body.accept !== 'boolean') throw new InputError('Conferma non valida');
+      return Response.json(await auditedMutation(session, 'confirm-answer', () => mutate(session, body.revision, body.operationId, s => confirmAnswer(s, body.accept as boolean))));
+    }
     if (action === 'turn') {
       const utterance = text(body.text, 'risposta', 4000);
-      return Response.json(await mutate(session, body.revision, body.operationId, async s => {
+      if (body.source !== undefined && body.source !== 'voice' && body.source !== 'text') throw new InputError('Modalità non valida');
+      let interpretation: Interpretation | undefined;
+      return Response.json(await auditedMutation(session, 'turn', () => mutate(session, body.revision, body.operationId, async s => {
         await budget(s, 'turns', 300);
-        return applyInterpretation(s, utterance, await interpret(s, utterance));
-      }));
+        interpretation = await interpret(s, utterance);
+        return applyInterpretation(s, utterance, interpretation);
+      }), { text: utterance, inputMode: body.source === 'voice' ? 'voice' : 'text', interpretation: () => interpretation }));
     }
-    if (action === 'complete') return Response.json(await mutate(session, body.revision, body.operationId, confirm));
+    if (action === 'complete') return Response.json(await auditedMutation(session, 'complete', () => mutate(session, body.revision, body.operationId, confirm)));
     if (action === 'speech') {
       const spoken = session.messages.find(m => m.id === body.messageId && m.role === 'assistant');
       if (!spoken || spoken.id !== session.messages.at(-1)?.id) throw new InputError('Messaggio non disponibile');
@@ -81,31 +96,8 @@ export async function POST(req: Request, context: Context) {
     }
     if (action === 'realtime') {
       if (process.env.ONBOARDING_AI_ENABLED !== 'true' || !process.env.OPENAI_API_KEY) throw new InputError('Audio live non configurato', 503);
-      const sdp = text(body.sdp, 'connessione audio', 30_000);
       await budget(session, 'realtimeConnections', 8);
-      // Live-transcribe currently rejects server_vad; this flow requires automatic turn detection.
-      const model = process.env.OPENAI_TRANSCRIPTION_MODEL || 'gpt-4o-transcribe';
-      if (!['gpt-4o-transcribe', 'gpt-4o-mini-transcribe'].includes(model)) throw new InputError('Modello di trascrizione non compatibile con i turni automatici', 503);
-      const sessionConfig = { type: 'transcription', audio: { input: {
-        noise_reduction: { type: 'near_field' },
-        transcription: { model, language: session.flow.locale,
-          prompt: session.flow.locale === 'it' ? 'Questionario di onboarding in italiano. Trascrivi fedelmente numeri e risposte.' : 'Onboarding questionnaire in English. Transcribe numbers and answers faithfully.' },
-        turn_detection: { type: 'server_vad', threshold: .5, prefix_padding_ms: 300, silence_duration_ms: 700 },
-      } } };
-      const minted = await fetch('https://api.openai.com/v1/realtime/client_secrets', {
-        method: 'POST', redirect: 'error', signal: AbortSignal.timeout(10_000),
-        headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ session: sessionConfig, expires_after: { anchor: 'created_at', seconds: 60 } }),
-      });
-      if (!minted.ok) { await minted.body?.cancel(); throw new InputError('Trascrizione live non disponibile', 503); }
-      const ephemeral = await minted.json();
-      if (typeof ephemeral.value !== 'string') throw new InputError('Trascrizione live non disponibile', 503);
-      const response = await fetch('https://api.openai.com/v1/realtime/calls', {
-        method: 'POST', redirect: 'error', cache: 'no-store', signal: AbortSignal.timeout(20_000),
-        headers: { Authorization: `Bearer ${ephemeral.value}`, 'Content-Type': 'application/sdp', 'OpenAI-Safety-Identifier': hash(`${session.siteId}:${session.subject}`) }, body: sdp,
-      });
-      if (!response.ok) { await response.body?.cancel(); throw new InputError('Connessione vocale non disponibile. Riprova o usa i campi.', 503); }
-      return Response.json({ sdp: await response.text() });
+      return Response.json(await transcriptionConnection(session, body.sdp));
     }
     throw new InputError('Non trovato', 404);
   } catch (error) { return errorResponse(error); }

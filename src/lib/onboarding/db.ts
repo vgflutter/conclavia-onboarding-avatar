@@ -1,6 +1,7 @@
 import mongoose from 'mongoose';
 import type { Session, Site } from './types';
-type Runtime = { connection?: Promise<typeof mongoose>; indexes?: Promise<void> };
+import type { AuditEvent } from './audit';
+type Runtime = { connection?: Promise<typeof mongoose>; indexes?: Promise<void>; auditIndexes?: Promise<void> };
 const globalDb = globalThis as typeof globalThis & { onboardingDb?: Runtime };
 const runtime = globalDb.onboardingDb ??= {};
 
@@ -36,4 +37,17 @@ export async function limit(key: string, maximum: number, seconds = 60) {
     $inc: { count: 1 }, $setOnInsert: { expiresAt: new Date((bucket + 2) * seconds * 1000) },
   }, { upsert: true, returnDocument: 'after' });
   return (row?.count ?? maximum + 1) <= maximum;
+}
+
+// Audit indexes are independent: an audit storage failure must not prevent the
+// application from loading or saving the questionnaire itself.
+export async function auditCollection() {
+  const db = await database();
+  const events = db.collection<AuditEvent>('onboarding_audit_events');
+  runtime.auditIndexes ??= (async () => {
+    await events.createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+    await events.createIndex({ siteId: 1, sessionId: 1, at: 1, _id: 1 });
+  })().catch(error => { runtime.auditIndexes = undefined; throw error; });
+  await runtime.auditIndexes;
+  return events;
 }

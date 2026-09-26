@@ -14,7 +14,7 @@ process.env.ONBOARDING_ADMIN_TOKEN = 'test-admin-credential-with-at-least-32-cha
 process.env.ONBOARDING_SESSION_SECRET = 'test-signing-secret-with-at-least-32-chars';
 
 export default defineConfig({ testDir: './tests/browser', fullyParallel: false, workers: 1, timeout: 60_000,
-  use: { baseURL: 'http://localhost:3103', trace: 'retain-on-failure', screenshot: 'only-on-failure' },
+  use: { baseURL: 'http://localhost:3103', actionTimeout: 15_000, trace: 'retain-on-failure', screenshot: 'only-on-failure' },
   webServer: { command: 'npm run dev -- --port 3103', url: 'http://localhost:3103', reuseExistingServer: false, timeout: 90_000 },
   projects: [{ name: 'chrome', use: { ...devices['Desktop Chrome'], channel: 'chrome' } }],
 });

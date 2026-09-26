@@ -31,20 +31,39 @@ test.afterAll(async () => {
   expect(db).toBe(process.env.MONGODB_DB_NAME);
   await mongoose.connection.db!.dropDatabase(); await mongoose.disconnect();
 });
+test('shared host is configurable, its assets seek correctly, and active snapshots remain immutable', async ({ page, request }) => {
+  expect((await request.post('/api/admin/login', { headers, data: { token: process.env.ONBOARDING_ADMIN_TOKEN } })).ok()).toBe(true);
+  const avatar = { ...defaultAvatar, appearance: 'conclavia_host', visualStyle: 'photoreal_host' };
+  const created = await request.post('/api/admin/sites', { headers, data: { id: 'host-test', name: 'Host test', avatar, context: '', allowedOrigins: [origin] } });
+  expect(created.status()).toBe(201);
+  const data = await created.json();
+  const launch = await create(request, data.apiKey);
+  await page.goto(launch.url);
+  await expect(page.getByTestId('photoreal-canvas')).toHaveAttribute('data-renderer-ready', 'true');
+  const site = { ...data.site, avatar: defaultAvatar, id: 'host-test' };
+  expect((await request.put('/api/admin/sites/host-test', { headers, data: site })).status()).toBe(200);
+  await page.reload();
+  await expect(page.getByTestId('avatar-photoreal')).toHaveAttribute('data-appearance', 'conclavia_host');
+  const part = await request.get('/avatars/host-v1/avatar-welcome-it.mp4', { headers: { range: 'bytes=0-31' } });
+  expect(part.status()).toBe(206); expect((await part.body()).length).toBe(32);
+  expect((await request.get('/avatars/host-v1/manifest.json')).status()).toBe(404);
+  // Invalid style/identity pairs never reach the stored site or future sessions.
+  expect((await request.put('/api/admin/sites/host-test', { headers, data: { ...site, revision: site.revision + 1, avatar: { ...avatar, visualStyle: 'editorial' } } })).status()).toBe(400);
+});
 test('a customer completes the conditional onboarding, corrects a branch, reviews and confirms', async ({ page, request }) => {
   const launch = await create(request);
   const errors: string[] = []; page.on('pageerror', e => errors.push(e.message));
   await page.goto(launch.url);
-  await page.getByRole('checkbox').check(); await page.getByRole('button', { name: 'Inizia il percorso' }).click();
+  await page.getByRole('checkbox').check(); await page.getByRole('button', { name: 'Continua scrivendo' }).click();
   await page.getByRole('textbox', { name: 'Come preferisci essere chiamato?' }).fill('Mario');
   await page.getByRole('button', { name: 'Conferma risposta' }).click();
   await page.getByRole('button', { name: 'Per la mia attività' }).click(); await page.getByRole('button', { name: 'Conferma risposta' }).click();
   await page.getByRole('spinbutton', { name: 'Quante persone' }).fill('4'); await page.getByRole('button', { name: 'Conferma risposta' }).click();
   await page.getByRole('textbox', { name: 'Quale risultato' }).fill('Preparare il primo accesso'); await page.getByRole('button', { name: 'Conferma risposta' }).click();
   await expect(page.getByRole('heading', { name: 'Rivediamo le tue risposte.' })).toBeVisible();
-  await page.locator('.review-item').filter({ hasText: 'In quale contesto' }).getByRole('button', { name: 'Modifica' }).click();
+  await page.locator('[class*=reviewItem]').filter({ hasText: 'In quale contesto' }).getByRole('button', { name: 'Modifica' }).click();
   await page.getByRole('button', { name: 'Per me', exact: true }).click(); await page.getByRole('button', { name: 'Salva correzione' }).click();
-  await expect(page.locator('.review-item').filter({ hasText: 'Quante persone' })).toHaveCount(0);
+  await expect(page.locator('[class*=reviewItem]').filter({ hasText: 'Quante persone' })).toHaveCount(0);
   await page.reload(); await expect(page.getByRole('heading', { name: 'Rivediamo le tue risposte.' })).toBeVisible();
   await page.getByRole('button', { name: 'Conferma tutte le risposte' }).click();
   await expect(page.getByRole('heading', { name: 'Grazie per questo primo incontro.' })).toBeVisible();
@@ -79,6 +98,31 @@ test('concurrent writes and retried operations cannot silently replace answers',
   const final = await (await request.get(root, { headers: auth })).json(); expect(final.revision).toBe(2);
   expect((await request.post(`${root}/realtime`, { headers: auth, data: { sdp: 'not a real SDP' } })).status()).toBe(503);
 });
+test('pending spoken answers persist, reject safely and require an explicit single-answer confirmation', async ({ request }) => {
+  const launch = await create(request);
+  const root = '/api/v1/sessions/' + launch.sessionId;
+  const auth = { origin, Authorization: 'Bearer ' + new URL(launch.url).hash.slice(1) };
+  const sessions = (await collections()).sessions;
+  // Seed a synthetic interpreted proposal; the provider is deliberately absent in this suite.
+  await sessions.updateOne({ _id: launch.sessionId }, { $set: {
+    consentAt: 'yes', answers: { name: 'Test', activity: 'business' }, revision: 1,
+    pendingAnswer: { questionId: 'teamSize', value: 4 },
+  } });
+  expect((await (await request.get(root, { headers: auth })).json()).pendingAnswer).toEqual({ questionId: 'teamSize', value: 4 });
+  const rejected = await request.post(root + '/confirm-answer', { headers: auth, data: { accept: false, revision: 1, operationId: randomUUID() } });
+  expect(rejected.status()).toBe(200);
+  expect((await rejected.json()).pendingAnswer).toEqual({ questionId: 'teamSize', value: null });
+  const badConfirm = await request.post(root + '/confirm-answer', { headers: auth, data: { accept: true, revision: 2, operationId: randomUUID() } });
+  expect(badConfirm.status()).toBe(400);
+  await sessions.updateOne({ _id: launch.sessionId }, { $set: { pendingAnswer: { questionId: 'teamSize', value: 7 } } });
+  const op = randomUUID();
+  const save = () => request.post(root + '/confirm-answer', { headers: auth, data: { accept: true, revision: 2, operationId: op } });
+  const saved = await (await save()).json();
+  expect(saved.answers.teamSize).toBe(7); expect(saved.pendingAnswer).toBeNull(); expect(saved.revision).toBe(3);
+  expect((await (await save()).json()).revision).toBe(3);
+  const reload = await (await request.get(root, { headers: auth })).json();
+  expect(reload.pendingAnswer).toBeNull(); expect(reload.answers.teamSize).toBe(7);
+});
 test('studio and shared avatar assets render without duplicate React instances', async ({ page, request }) => {
   const errors: string[] = []; page.on('pageerror', e => errors.push(e.message));
   await page.goto('/studio'); await page.getByLabel('Chiave di accesso allo studio').fill(process.env.ONBOARDING_ADMIN_TOKEN!);
@@ -109,6 +153,49 @@ test('studio and shared avatar assets render without duplicate React instances',
   expect(errors).toEqual([]);
 });
 
+test('integration preferences persist, reject disallowed returns and generate secret-free examples', async ({ page, request }) => {
+  expect((await request.post('/api/admin/login', { headers, data: { token: process.env.ONBOARDING_ADMIN_TOKEN } })).ok()).toBe(true);
+  const created = await request.post('/api/admin/sites', { headers, data: {
+    id: 'integration-demo', name: 'Umatt · ambiente dimostrativo', avatar: defaultAvatar, context: '',
+    allowedOrigins: ['https://demo.example'],
+  } });
+  expect(created.status()).toBe(201);
+  const { site, apiKey } = await created.json();
+  const preference = { ...site, integration: { mode: 'iframe', returnUrl: 'https://demo.example/onboarding/return' } };
+  const saved = await request.put('/api/admin/sites/integration-demo', { headers, data: preference });
+  expect(saved.status()).toBe(200);
+  const current = (await saved.json()).site;
+  expect((await request.put('/api/admin/sites/integration-demo', { headers, data: { ...current, allowedOrigins: ['https://other.example'] } })).status()).toBe(400);
+  // An older caller omitting preferences must not erase the saved setup.
+  const { integration: _, ...legacy } = current; void _;
+  const updated = await request.put('/api/admin/sites/integration-demo', { headers, data: legacy });
+  expect(updated.status()).toBe(200); expect((await updated.json()).site.integration).toEqual(preference.integration);
+  await page.goto('/studio');
+  await page.getByLabel('Chiave di accesso allo studio').fill(process.env.ONBOARDING_ADMIN_TOKEN!);
+  await page.getByRole('button', { name: 'Accedi allo studio' }).click();
+  await page.getByRole('combobox', { name: 'Sito', exact: true }).selectOption('integration-demo');
+  await page.getByRole('button', { name: '04 Integrazione' }).click();
+  await expect(page.getByRole('button', { name: /Dentro il tuo sito/ })).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByLabel('Pagina di ritorno')).toHaveValue(preference.integration.returnUrl);
+  await expect(page.getByText('Da eseguire con un cliente di test')).toBeVisible();
+  await page.getByRole('button', { name: /Pagina Conclavia/ }).click();
+  await page.getByRole('button', { name: /Salva modifiche/ }).click();
+  await expect(page.getByText('Configurazione salvata.', { exact: false })).toBeVisible();
+  await page.locator('summary').filter({ hasText: 'Per chi integra' }).click();
+  await expect(page.locator('pre').first()).toContainText('CONCLAVIA_SITE_KEY');
+  expect(await page.locator('body').innerText()).not.toContain(apiKey);
+  const download = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Scarica guida di integrazione' }).click();
+  expect((await download).suggestedFilename()).toBe('conclavia-integration.md');
+  await page.locator('summary').filter({ hasText: 'Per chi integra' }).click();
+  // Documentation capture: omit the development server's floating indicator.
+  await page.addStyleTag({ content: 'nextjs-portal { display: none !important; }' });
+  await page.screenshot({ path: 'test-results/integration-studio-demo.png', fullPage: true });
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await page.screenshot({ path: 'test-results/integration-studio-demo-mobile.png', fullPage: true });
+});
+
 test('an allowed cross-origin iframe completes and sends only its session ID to the parent', async ({ page, request }) => {
   const res = await request.post('/api/v1/sessions', { headers: { Authorization: `Bearer ${key}` }, data: {
     subject: 'fictional-embedded-user', flow: { ...exampleFlow, questions: exampleFlow.questions.slice(0, 1) }, returnUrl: 'http://localhost:3116/return',
@@ -127,10 +214,71 @@ test('an allowed cross-origin iframe completes and sends only its session ID to 
   try {
     await page.goto('http://localhost:3116/embed');
     const frame = page.frameLocator('#onboarding');
-    await frame.getByRole('checkbox').check(); await frame.getByRole('button', { name: 'Inizia il percorso' }).click();
+    await frame.getByRole('checkbox').check(); await frame.getByRole('button', { name: 'Continua scrivendo' }).click();
     await frame.getByRole('textbox', { name: 'Come preferisci essere chiamato?' }).fill('Mario');
     await frame.getByRole('button', { name: 'Conferma risposta' }).click();
     await frame.getByRole('button', { name: 'Conferma tutte le risposte' }).click();
     await expect.poll(() => page.evaluate(() => (window as Window & { received?: unknown }).received)).toEqual({ type: 'conclavia.completed', sessionId: launch.sessionId });
   } finally { parent.closeAllConnections(); await new Promise<void>(resolve => parent.close(() => resolve())); }
+});
+
+test('a stale browser tab recovers the current answer without overwriting it', async ({ page, context, request }) => {
+  const launch = await create(request);
+  const auth = { origin, Authorization: `Bearer ${new URL(launch.url).hash.slice(1)}` };
+  const root = `/api/v1/sessions/${launch.sessionId}`;
+  expect((await request.post(`${root}/consent`, { headers: auth, data: { accept: true, revision: 0, operationId: randomUUID() } })).ok()).toBeTruthy();
+  const second = await context.newPage();
+  try {
+    await page.goto(launch.url); await second.goto(launch.url);
+    for (const tab of [page, second]) await tab.getByRole('button', { name: 'Scrivi invece' }).click();
+    await page.getByRole('textbox', { name: 'Come preferisci essere chiamato?' }).fill('First confirmed');
+    await second.getByRole('textbox', { name: 'Come preferisci essere chiamato?' }).fill('Stale replacement');
+    await page.getByRole('button', { name: 'Conferma risposta' }).click();
+    await expect(page.getByRole('heading', { name: 'In quale contesto userai il servizio?' })).toBeVisible();
+    await second.getByRole('button', { name: 'Conferma risposta' }).click();
+    await expect(second.locator('main').getByRole('alert')).toBeVisible();
+    await expect(second.getByRole('heading', { name: 'In quale contesto userai il servizio?' })).toBeVisible();
+    const current = await (await request.get(root, { headers: auth })).json();
+    expect(current.answers.name).toBe('First confirmed'); expect(current.revision).toBe(2);
+  } finally { await second.close(); }
+});
+
+test('published site changes do not alter an active session snapshot or reveal private context', async ({ request }) => {
+  const first = await create(request);
+  const before = await (await collections()).sessions.findOne({ _id: first.sessionId });
+  if (!before) throw new Error('Missing synthetic session');
+  const original = await (await collections()).sites.findOne({ _id: before.siteId });
+  if (!original) throw new Error('Missing synthetic site');
+  try {
+    await (await collections()).sites.updateOne({ _id: before.siteId }, { $set: { context: 'Updated private synthetic context', avatar: { ...original.avatar, name: 'Updated host avatar' }, revision: 2 } });
+    const second = await create(request);
+    const after = await (await collections()).sessions.findOne({ _id: first.sessionId });
+    const fresh = await (await collections()).sessions.findOne({ _id: second.sessionId });
+    expect(after?.avatar).toEqual(before.avatar); expect(after?.context).toBe(before.context); expect(after?.flow).toEqual(before.flow);
+    expect(fresh?.avatar.name).toBe('Updated host avatar');
+    const view = await (await request.get(`/api/v1/sessions/${first.sessionId}`, { headers: { Authorization: `Bearer ${new URL(first.url).hash.slice(1)}` } })).json();
+    expect(view.context).toBeUndefined(); expect(view.subject).toBeUndefined(); expect(view.tokenHash).toBeUndefined();
+  } finally { await (await collections()).sites.replaceOne({ _id: original._id }, original); }
+});
+
+test('review is not completion and a confirmed result cannot be silently edited', async ({ request }) => {
+  const launch = await create(request);
+  const auth = { origin, Authorization: `Bearer ${new URL(launch.url).hash.slice(1)}` };
+  const root = `/api/v1/sessions/${launch.sessionId}`;
+  let revision = 0;
+  const post = async (action: string, data: Record<string, unknown>) => {
+    const response = await request.post(`${root}/${action}`, { headers: auth, data: { ...data, revision, operationId: randomUUID() } });
+    expect(response.ok()).toBeTruthy(); const view = await response.json(); revision = view.revision; return view;
+  };
+  await post('consent', { accept: true }); await post('answer', { questionId: 'name', value: 'Confirmed customer' });
+  await post('answer', { questionId: 'activity', value: 'personal' });
+  const review = await post('answer', { questionId: 'goal', value: 'Start safely' }); expect(review.status).toBe('review');
+  const resultUrl = `${root}/result?subject=fictional-user`;
+  expect((await request.get(resultUrl, { headers: { Authorization: `Bearer ${key}` } })).status()).toBe(409);
+  await post('complete', {});
+  const final = await (await request.get(resultUrl, { headers: { Authorization: `Bearer ${key}` } })).json();
+  expect(final.answers).toEqual({ name: 'Confirmed customer', activity: 'personal', goal: 'Start safely' });
+  expect((await request.post(`${root}/answer`, { headers: auth, data: { revision, operationId: randomUUID(), questionId: 'name', value: 'Unconfirmed replacement' } })).status()).toBe(409);
+  const unchanged = await (await request.get(resultUrl, { headers: { Authorization: `Bearer ${key}` } })).json();
+  expect(unchanged.answers).toEqual(final.answers); expect(unchanged.confirmedAt).toBe(final.confirmedAt);
 });

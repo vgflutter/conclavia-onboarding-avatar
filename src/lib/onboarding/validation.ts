@@ -82,6 +82,10 @@ function fields(value: unknown, nested = false): Field[] {
       (nested && ['multi_select', 'records'].includes(kind))) throw new InputError('Tipo domanda non valido');
     const result: Field = { id: key, title: text(raw.title, 'domanda', 700), type: kind, required: raw.required !== false };
     if (raw.description !== undefined) result.description = text(raw.description, 'descrizione', 1500, true);
+    if (raw.confirmSpoken !== undefined) {
+      if (typeof raw.confirmSpoken !== 'boolean') throw new InputError('Conferma vocale non valida');
+      result.confirmSpoken = raw.confirmSpoken;
+    }
     if (['single_select', 'multi_select'].includes(kind)) {
       if (!Array.isArray(raw.options) || !raw.options.length || raw.options.length > 80) throw new InputError('Opzioni mancanti');
       const optionIds = new Set<string>();
@@ -152,7 +156,9 @@ export function validateAvatar(value: unknown): Avatar {
 export function validateOrigins(value: unknown): string[] {
   if (!Array.isArray(value) || !value.length || value.length > 20) throw new InputError('Specifica le origini autorizzate');
   return [...new Set(value.map(v => {
-    const url = new URL(text(v, 'origine', 300));
+    let url: URL;
+    try { url = new URL(text(v, 'origine', 300)); }
+    catch { throw new InputError('Origine non valida: usa un indirizzo HTTPS completo, senza percorso'); }
     if ((url.protocol !== 'https:' && !(url.protocol === 'http:' && ['localhost', '127.0.0.1'].includes(url.hostname))) ||
       url.username || url.password || url.search || url.hash || url.pathname !== '/') throw new InputError('Origine non valida');
     return url.origin;

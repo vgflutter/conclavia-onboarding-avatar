@@ -54,6 +54,7 @@ export async function mutate(session: Session, revision: unknown, operation: unk
     const updated = await change(session);
     const saved = await sessions.findOneAndUpdate({ _id: session._id, revision: session.revision, lockId }, {
       $set: { answers: updated.answers, skipped: updated.skipped, messages: updated.messages,
+        pendingAnswer: updated.pendingAnswer ?? null,
         status: updated.status, ...(updated.consentAt ? { consentAt: updated.consentAt } : {}),
         ...(updated.confirmedAt ? { confirmedAt: updated.confirmedAt } : {}),
         operations: [...session.operations, operationId].slice(-500) },

@@ -1,0 +1,13 @@
+# Template for Caddy installed ON THE HOST, beside the loopback-bound container.
+# Configure DNS and the server ingress before enabling; never use this file for Meeting.
+onboarding.conclavia.me {
+    request_body {
+        max_size 160KB
+    }
+    reverse_proxy 127.0.0.1:3002 {
+        # Deliver TTS chunks immediately; do not buffer a complete audio response.
+        flush_interval -1
+    }
+    # Access logs are deliberately disabled: session paths and subjects are private.
+    # Keep diagnostics to counters/status/latency and route templates.
+}

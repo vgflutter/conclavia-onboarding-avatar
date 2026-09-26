@@ -11,6 +11,8 @@
     "start": "next start -p 3002",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
+    "check:production": "node scripts/check-production.mjs",
+    "test:standalone": "node scripts/verify-standalone.mjs",
     "test": "tsx --test tests/*.test.ts",
     "test:e2e": "playwright test",
     "setup:local": "node scripts/setup-local.mjs",

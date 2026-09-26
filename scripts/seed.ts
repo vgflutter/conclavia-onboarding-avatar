@@ -22,7 +22,7 @@ async function main() {
   mkdirSync('.local', { recursive: true });
   for (const [id, name, context] of [
     ['demo', 'Il tuo sito', 'Accompagna il cliente nel primo accesso al servizio.'],
-    ['aihat', 'AIHat', 'Onboarding AIHat: raccogliere le risposte ai questionari del profilo investitore e del portafoglio. Non dare consigli di investimento, non suggerire le risposte ai test di conoscenza, non calcolare punteggi e non creare portafogli. Le conferme e le valutazioni finali appartengono ad AIHat.'],
+    ['aihat', 'unmatt', 'Onboarding Unmatt: raccogliere le risposte ai questionari del profilo investitore e del portafoglio. Non dare consigli di investimento, non suggerire le risposte ai test di conoscenza, non calcolare punteggi e non creare portafogli. Le conferme e le valutazioni finali appartengono a Unmatt.'],
   ]) {
     if (await sites.findOne({ _id: id })) { console.log(`${id}: configurazione esistente preservata.`); continue; }
     const key = token();

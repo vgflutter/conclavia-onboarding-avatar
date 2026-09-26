@@ -2,8 +2,10 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { BusinessAvatar } from './BusinessAvatar';
+import { IntegrationPanel } from './IntegrationPanel';
 import { defaultAvatar, exampleFlow } from '@/lib/onboarding/example';
 import { AVATAR_VOICES } from '@/lib/avatar-voice-catalog';
+import { compatibleAvatarVoice } from '@conclavia/avatar-kit/lib/avatar-voice-catalog';
 import { avatarAppearanceForStyle, avatarAppearancesForStyle } from '@conclavia/avatar-kit/lib/avatar-catalog';
 import { ASSISTANT_VISUAL_STYLES } from '@conclavia/avatar-kit/types/assistant-profile';
 import { avatarVisualStyleLabel } from '@conclavia/avatar-kit/lib/avatar-visual-style';
@@ -28,13 +30,21 @@ export function Studio() {
   const [flowsJson, setFlowsJson] = useState('[]');
   const [apiKey, setApiKey] = useState('');
   const [creating, setCreating] = useState(false);
+  const [integrationOrigin, setIntegrationOrigin] = useState('');
   const [stats, setStats] = useState({ active: 0, completed: 0 });
   const [providers, setProviders] = useState({ intelligence: false, voice: false });
   function choose(site: PublicSite) { setDraft(structuredClone(site)); setFlowsJson(JSON.stringify(site.flows, null, 2)); setNotice(''); setError(''); setCreating(false); setApiKey(''); }
+  function chooseStyle(visualStyle: Site['avatar']['visualStyle']) {
+    if (!draft) return;
+    const appearance = avatarAppearanceForStyle(draft.avatar.appearance, visualStyle);
+    setDraft({ ...draft, avatar: { ...draft.avatar, visualStyle, appearance,
+      ...(visualStyle === 'photoreal_host' ? { voiceIt: compatibleAvatarVoice(draft.avatar.voiceIt, 'it', appearance),
+        voiceEn: compatibleAvatarVoice(draft.avatar.voiceEn, 'en', appearance) } : {}) } });
+  }
   async function load() {
     try {
       const data = await api('sites');
-      setSites(data.sites); setStats(data.stats); setProviders(data.providers); setLogged(true);
+      setSites(data.sites); setStats(data.stats); setProviders(data.providers); setIntegrationOrigin(data.origin); setLogged(true);
       if (data.sites[0]) choose(data.sites[0]);
     } catch (e) {
       setLogged(false);
@@ -45,7 +55,7 @@ export function Studio() {
     let active = true;
     void api('sites').then(data => {
       if (!active) return;
-      setSites(data.sites); setStats(data.stats); setProviders(data.providers); setLogged(true);
+      setSites(data.sites); setStats(data.stats); setProviders(data.providers); setIntegrationOrigin(data.origin); setLogged(true);
       if (data.sites[0]) choose(data.sites[0]);
     }).catch(e => { if (active) { setLogged(false); if (e.status !== 401) setError(e.message); } });
     return () => { active = false; };
@@ -92,10 +102,11 @@ export function Studio() {
         <div className="row spread"><label>Sito<select value={creating ? '' : draft._id} onChange={e => { const site = sites.find(s => s._id === e.target.value); if (site) choose(site); }}><option value="" disabled>Nuovo sito</option>{sites.map(s => <option key={s._id} value={s._id}>{s.name}</option>)}</select></label>
           <span className="small muted">{creating ? 'Nuova configurazione' : `Versione ${draft.revision}`} · Salvataggio esplicito</span></div>
         <nav className="tabs" aria-label="Configurazione">{[['avatar', '01 Avatar'], ['context', '02 Contesto'], ['flows', '03 Percorsi'], ['integration', '04 Integrazione']].map(([key, label]) => <button key={key} className={tab === key ? 'active' : ''} onClick={() => setTab(key)}>{label}</button>)}</nav>
-        <div className="workspace"><section className="card stack">
+        <div className={tab === 'integration' ? 'workspace integration-workspace' : 'workspace'}><section className="card stack">
           {tab === 'avatar' && <><div><div className="eyebrow">Il volto del tuo servizio</div><h2>Piacere di conoscerti.</h2><p>Scegli come si presenta e come parla il tuo assistente.</p></div>
             <label>Nome dell’avatar<input value={draft.avatar.name} maxLength={80} onChange={e => setDraft({ ...draft, avatar: { ...draft.avatar, name: e.target.value } })} /></label>
-            <label>Stile visivo</label><div className="style-options">{ASSISTANT_VISUAL_STYLES.map(value => <button className={draft.avatar.visualStyle === value ? 'selected' : ''} key={value} onClick={() => setDraft({ ...draft, avatar: { ...draft.avatar, visualStyle: value, appearance: avatarAppearanceForStyle(draft.avatar.appearance, value) } })}>{avatarVisualStyleLabel(value, true)}</button>)}</div>
+            <label>Stile visivo</label><div className="style-options">{ASSISTANT_VISUAL_STYLES.map(value => <button className={draft.avatar.visualStyle === value ? 'selected' : ''} key={value} onClick={() => chooseStyle(value)}>{avatarVisualStyleLabel(value, true)}</button>)}</div>
+            {draft.avatar.visualStyle === 'photoreal_host' && <p className="small">Il volto della homepage, con movimenti naturali e labiale dinamico sperimentale. Il benvenuto registrato e le risposte libere hanno una resa diversa.</p>}
             <div className="fields"><label>Personaggio<select value={draft.avatar.appearance} onChange={e => setDraft({ ...draft, avatar: { ...draft.avatar, appearance: e.target.value as Site['avatar']['appearance'] } })}>{avatarAppearancesForStyle(draft.avatar.visualStyle).map(avatar => <option key={avatar.id} value={avatar.id}>{avatar.labels.it}</option>)}</select></label>
               <label>Velocità della voce<input type="number" min="0.8" max="1.2" step="0.05" value={draft.avatar.speakingRate} onChange={e => setDraft({ ...draft, avatar: { ...draft.avatar, speakingRate: Number(e.target.value) } })} /></label></div>
             <div className="fields">{(['it', 'en'] as const).map(locale => <label key={locale}>{locale === 'it' ? 'Voce italiana' : 'Voce inglese'}<select value={locale === 'it' ? draft.avatar.voiceIt : draft.avatar.voiceEn} onChange={e => setDraft({ ...draft, avatar: { ...draft.avatar, [locale === 'it' ? 'voiceIt' : 'voiceEn']: e.target.value } })}>{AVATAR_VOICES.filter(v => v.language === locale).map(v => <option key={v.id} value={v.id}>{v.name} · {v.gender === 'male' ? 'M' : 'F'}</option>)}</select></label>)}</div>
@@ -109,15 +120,9 @@ export function Studio() {
             <button onClick={() => { const next = [...draft.flows.filter(f => f.id !== exampleFlow.id), exampleFlow]; setDraft({ ...draft, flows: next }); setFlowsJson(JSON.stringify(next, null, 2)); }}>Aggiungi percorso di esempio</button>
             <details><summary>Definizione dei percorsi · editor avanzato</summary><p className="small">Domande, opzioni, condizioni e vincoli. Il salvataggio controlla lo schema.</p><label>Schema dei percorsi<textarea className="code" rows={20} value={flowsJson} onChange={e => setFlowsJson(e.target.value)} /></label></details>
           </>}
-          {tab === 'integration' && <><div><div className="eyebrow">Pronto per il tuo sito</div><h2>Un servizio, più esperienze.</h2><p>Apri la sessione in una pagina dedicata o incorporala nel sito.</p></div>
-            <div className="fields"><label>Nome del sito<input value={draft.name} onChange={e => setDraft({ ...draft, name: e.target.value })} /></label><label>Identificatore<input disabled={!creating} value={draft._id} onChange={e => setDraft({ ...draft, _id: e.target.value })} placeholder="il-tuo-sito" /></label></div>
-            <label>Origini autorizzate · una per riga<textarea rows={4} value={draft.allowedOrigins.join('\n')} onChange={e => setDraft({ ...draft, allowedOrigins: e.target.value.split('\n') })} /></label>
-            <div className="notice">La chiave di integrazione si usa soltanto sul server del sito. La sessione del cliente riceve un accesso limitato al proprio questionario.</div>
-            {apiKey && <label>Chiave creata · copiala ora, verrà mostrata una sola volta<input readOnly type="password" value={apiKey} onFocus={e => e.target.select()} /><button onClick={() => navigator.clipboard.writeText(apiKey)}>Copia chiave</button></label>}
-            <p className="small">Collegamento tramite <code>POST /api/v1/sessions</code>. Le risposte confermate si recuperano dal server tramite <code>GET /api/v1/sessions/:id/result</code>.</p>
-          </>}
+          {tab === 'integration' && <IntegrationPanel key={draft._id} site={draft} onChange={setDraft} creating={creating} apiKey={apiKey} origin={integrationOrigin} />}
           <div className="form-actions row spread"><span className="small muted">Le sessioni in corso mantengono la loro configurazione.</span><button className="primary" disabled={busy} onClick={save}>{busy ? 'Salvataggio…' : creating ? 'Crea sito' : 'Salva modifiche'} →</button></div>
-        </section><aside className="preview"><div className="preview-avatar"><BusinessAvatar appearance={draft.avatar.appearance} visualStyle={draft.avatar.visualStyle} mood="friendly" voiceLevel={0} /></div><div className="preview-caption"><div className="row spread"><h3>{draft.avatar.name || 'Il tuo avatar'}</h3><span className="pill">Anteprima</span></div><p className="small" style={{ margin: '10px 0 0' }}>Qui per accompagnarti, una domanda alla volta.</p></div></aside></div>
+        </section><aside className="preview"><div className="preview-avatar"><BusinessAvatar appearance={draft.avatar.appearance} visualStyle={draft.avatar.visualStyle} mood="friendly" voiceLevel={0} welcomeLanguage="it" /></div><div className="preview-caption"><div className="row spread"><h3>{draft.avatar.name || 'Il tuo avatar'}</h3><span className="pill">Anteprima</span></div><p className="small" style={{ margin: '10px 0 0' }}>Qui per accompagnarti, una domanda alla volta.</p></div></aside></div>
         <p className="small muted" style={{ marginTop: 24 }}>Conversazione: {providers.intelligence ? 'configurata' : 'da configurare'} · Voce: {providers.voice ? 'configurata' : 'da configurare'}</p>
       </>}
     </main></div>;

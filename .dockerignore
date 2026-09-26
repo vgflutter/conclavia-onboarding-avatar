@@ -1,0 +1,14 @@
+# An allowlist keeps local environment files, test recordings and Git out of builds.
+**
+!package.json
+!package-lock.json
+!next.config.ts
+!tsconfig.json
+!src/
+!src/**
+!public/
+!public/**
+!scripts/
+!scripts/production-config.mjs
+!scripts/check-production.mjs
+!scripts/start-production.mjs

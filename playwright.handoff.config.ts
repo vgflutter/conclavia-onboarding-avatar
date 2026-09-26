@@ -15,6 +15,6 @@ export default defineConfig({ ...base, testDir: './tests/handoff', timeout: 90_0
   webServer: [
     { command: 'node tests/handoff/backend.mjs', url: 'http://localhost:3115/health', timeout: 30_000 },
     { command: 'npm run dev -- --port 3103', url: 'http://localhost:3103', timeout: 90_000 },
-    { command: 'npm run dev -- --port 3114', cwd: '../aihat-client', url: 'http://localhost:3114/api/auth/providers', env: hostEnv, timeout: 90_000 },
+    { command: 'npm run dev -- --port 3114', cwd: process.env.ONBOARDING_TEST_HOST_DIR || '../aihat-client', url: 'http://localhost:3114/api/auth/providers', env: hostEnv, timeout: 90_000 },
   ],
 });

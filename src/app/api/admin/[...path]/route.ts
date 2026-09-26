@@ -1,8 +1,9 @@
-import { collections, limit } from '@/lib/onboarding/db';
+import { auditCollection, collections, limit } from '@/lib/onboarding/db';
 import { adminCookie, baseUrl, errorResponse, hash, jsonBody, requestIsAdmin, safeEqual, sameOrigin, token } from '@/lib/onboarding/security';
 import { id, InputError, record, text, validateAvatar, validateFlow, validateOrigins } from '@/lib/onboarding/validation';
 import { createSession } from '@/lib/onboarding/sessions';
 import type { Site } from '@/lib/onboarding/types';
+import { validateIntegration } from '@/lib/onboarding/integration';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -13,6 +14,17 @@ export async function GET(req: Request, context: Context) {
   try {
     if (!requestIsAdmin(req)) throw new InputError('Accedi allo studio', 401);
     const { path } = await context.params;
+    if (path.length === 5 && path[0] === 'sites' && path[2] === 'sessions' && path[4] === 'audit') {
+      const { sessions } = await collections();
+      const session = await sessions.findOne({ _id: path[3], siteId: path[1], expiresAt: { $gt: new Date() } });
+      if (!session) throw new InputError('Sessione non trovata', 404);
+      const offset = Number(new URL(req.url).searchParams.get('offset') ?? 0);
+      if (!Number.isSafeInteger(offset) || offset < 0 || offset > 1300) throw new InputError('Pagina non valida');
+      const events = await (await auditCollection()).find({ sessionId: session._id, siteId: session.siteId, expiresAt: { $gt: new Date() } })
+        .sort({ at: 1, _id: 1 }).skip(offset).limit(201).toArray();
+      return Response.json({ sessionId: session._id, events: events.slice(0, 200), nextOffset: events.length > 200 ? offset + 200 : null },
+        { headers: { 'Cache-Control': 'no-store' } });
+    }
     if (path.join('/') !== 'sites') throw new InputError('Non trovato', 404);
     const { sites, sessions } = await collections();
     const rows = await sites.find().sort({ name: 1 }).limit(100).toArray();
@@ -54,6 +66,7 @@ export async function POST(req: Request, context: Context) {
     const site: Site = { _id: id(body.id), name: text(body.name, 'nome'), keyHash: hash(key),
       allowedOrigins: validateOrigins(body.allowedOrigins), avatar: validateAvatar(body.avatar),
       context: text(body.context ?? '', 'contesto', 8000, true), flows: [], revision: 1, updatedAt: new Date() };
+    site.integration = validateIntegration(body.integration, site.allowedOrigins);
     if (await sites.findOne({ _id: site._id })) throw new InputError('Identificatore già utilizzato', 409);
     await sites.insertOne(site);
     return Response.json({ site: safeSite(site), apiKey: key }, { status: 201 });
@@ -70,9 +83,13 @@ export async function PUT(req: Request, context: Context) {
     const flows = body.flows.map(validateFlow);
     if (new Set(flows.map(f => f.id)).size !== flows.length) throw new InputError('Identificatori dei flussi duplicati');
     const { sites } = await collections();
+    const previous = await sites.findOne({ _id: path[1], revision: body.revision as number });
+    if (!previous) throw new InputError('Configurazione modificata altrove. Ricarica prima di salvare.', 409);
+    const allowedOrigins = validateOrigins(body.allowedOrigins);
+    const integration = validateIntegration(body.integration === undefined ? previous.integration : body.integration, allowedOrigins);
     const site = await sites.findOneAndUpdate({ _id: path[1], revision: body.revision as number }, {
       $set: { name: text(body.name, 'nome'), avatar: validateAvatar(body.avatar),
-        context: text(body.context, 'contesto', 8000, true), allowedOrigins: validateOrigins(body.allowedOrigins),
+        context: text(body.context, 'contesto', 8000, true), allowedOrigins, integration,
         flows, updatedAt: new Date() }, $inc: { revision: 1 },
     }, { returnDocument: 'after' });
     if (!site) throw new InputError('Configurazione modificata altrove. Ricarica prima di salvare.', 409);

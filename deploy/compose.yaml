@@ -1,0 +1,30 @@
+name: conclavia-onboarding
+services:
+  onboarding:
+    image: ${CONCLAVIA_ONBOARDING_IMAGE:-conclavia-onboarding:local}
+    build:
+      context: ..
+      additional_contexts:
+        avatar-kit: ../../conclavia-avatar-kit
+    env_file:
+      - path: ${ONBOARDING_ENV_FILE:?Set the absolute path of the private runtime environment file}
+        format: raw
+    environment:
+      NODE_ENV: production
+      HOSTNAME: 0.0.0.0
+      PORT: "3002"
+    ports:
+      - "127.0.0.1:3002:3002"
+    init: true
+    restart: unless-stopped
+    stop_grace_period: 45s
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: local
+      options:
+        max-size: "10m"
+        max-file: "3"
+# TLS terminates at a host reverse proxy. No new MongoDB service is created.
