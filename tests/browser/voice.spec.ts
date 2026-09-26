@@ -100,7 +100,7 @@ async function start(page: Page) {
   await expect(page.getByRole('button', { name: 'Metti in pausa' })).toBeVisible();
 }
 
-test('shared photoreal host follows session speech and closes immediately on interruption', async ({ page }) => {
+test('shared photoreal host follows session speech and clears articulation immediately on interruption', async ({ page }) => {
   await setup(page, { host: true });
   const canvas = page.getByTestId('photoreal-canvas');
   await expect(canvas).toHaveAttribute('data-renderer-ready', 'true');
