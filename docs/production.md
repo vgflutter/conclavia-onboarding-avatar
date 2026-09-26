@@ -88,7 +88,7 @@ Quote attuali: 100 nuove sessioni/ora/sito, 300 turni, 450 richieste TTS e 8 con
 
 Il progetto `/Users/vins/work/conclavia-deploy` prepara immagini per entrambe le app dallo stesso snapshot del kit, trasferisce bundle verificati e ambiente privato via SSH, controlla Mongo, bot attivi e sessioni Onboarding incomplete, attiva la release e prova HTTPS/autenticazione. Se il rilascio fallisce tenta il ripristino della release precedente. Consultare il suo README per setup, DNS, configurazione, manutenzione e rollback. Non esegue seed e non modifica AIHat.
 
-Sul VPS il sistema vede circa 1637 MiB di RAM: limiti iniziali di 512 MiB per app e 96 MiB per Caddy. Le build avvengono fuori dal VPS. Release `20260926150711021-239036` attiva per entrambi i servizi, con container healthy, DNS e certificati HTTPS verificati. Il tunnel persistente raggiunge Mongo su Unmatt tramite la sola rete Docker privata. AI e bot reali restano disattivati per questo collaudo; il manifesto della release del 26 settembre registra commit puliti per le due app e il kit.
+Sul VPS il sistema vede circa 1637 MiB di RAM: limiti iniziali di 512 MiB per app e 96 MiB per Caddy. Le build avvengono fuori dal VPS. Release `20260926165443400-c14e5e` attiva per entrambi i servizi, con container healthy, DNS e certificati HTTPS verificati. Il tunnel persistente raggiunge Mongo su Unmatt tramite la sola rete Docker privata. AI e bot reali restano disattivati per questo collaudo; il manifesto della release del 26 settembre registra commit puliti per le due app e il kit.
 
 ## Deploy Onboarding preparato
 
@@ -189,4 +189,4 @@ Nella revisione iniziale non furono modificati DNS, server remoti, configurazion
 
 ### Verifiche aggiuntive del tool di deploy
 
-Conclavia-deploy: 6 test Node, 12 test Python e una suite con Caddy reale passati. Build Linux amd64 di entrambe le app, esportazione/importazione delle immagini e identità delle immagini verificate. Sul VPS: HTTPS e health Mongo 200, gestione anonima 401, redirect HTTP verso HTTPS, tunnel persistente attivo; porte pubbliche 27017/3000/3002 chiuse. La chiave dedicata del tunnel rifiuta shell e inoltri verso altre porte. Nessun provider a pagamento chiamato. Il rollback dopo errore è verificato in simulazione; non è stato provocato un guasto della release pubblicata.
+Conclavia-deploy: 6 test Node, 19 test Python e una suite con Caddy reale passati. Build Linux amd64 di entrambe le app, esportazione/importazione delle immagini e identità delle immagini verificate. Sul VPS: HTTPS e health Mongo 200, gestione anonima 401, redirect HTTP verso HTTPS, tunnel persistente attivo; porte pubbliche 27017/3000/3002 chiuse. La chiave dedicata del tunnel rifiuta shell e inoltri verso altre porte. Nessun provider a pagamento chiamato. Il rollback dopo errore è verificato in simulazione; non è stato provocato un guasto della release pubblicata.
