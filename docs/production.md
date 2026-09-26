@@ -88,7 +88,7 @@ Quote attuali: 100 nuove sessioni/ora/sito, 300 turni, 450 richieste TTS e 8 con
 
 Il progetto `/Users/vins/work/conclavia-deploy` prepara immagini per entrambe le app dallo stesso snapshot del kit, trasferisce bundle verificati e ambiente privato via SSH, controlla Mongo, bot attivi e sessioni Onboarding incomplete, attiva la release e prova HTTPS/autenticazione. Se il rilascio fallisce tenta il ripristino della release precedente. Consultare il suo README per setup, DNS, configurazione, manutenzione e rollback. Non esegue seed e non modifica AIHat.
 
-Sul VPS il sistema vede circa 1637 MiB di RAM: limiti iniziali di 512 MiB per app e 96 MiB per Caddy. Le build avvengono fuori dal VPS. Release `20260926193234175-0715fb` attiva per entrambi i servizi, con container healthy, DNS e certificati HTTPS verificati. Il tunnel persistente raggiunge Mongo su Unmatt tramite la sola rete Docker privata. AI e bot reali restano disattivati per questo collaudo; il manifesto della release del 26 settembre registra commit puliti per le due app e il kit.
+Sul VPS il sistema vede circa 1637 MiB di RAM: limiti iniziali di 512 MiB per app e 96 MiB per Caddy. Le build avvengono fuori dal VPS. Release `20260926200232371-7dd045` attiva per entrambi i servizi, con container healthy, DNS e certificati HTTPS verificati. Il tunnel persistente raggiunge Mongo su Unmatt tramite la sola rete Docker privata. AI e bot reali restano disattivati per questo collaudo; il manifesto della release del 26 settembre registra commit puliti per le due app e il kit.
 
 ## Deploy Onboarding preparato
 
