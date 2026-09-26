@@ -4,7 +4,7 @@ Servizio indipendente per raccogliere risposte strutturate attraverso un avatar,
 
 ## Verso la produzione
 
-[Piano di rilascio Conclavia/Umatt](docs/production.md): dominio **conclavia.me**, Onboarding pubblico su `onboarding.conclavia.me` e Meeting privato su `meeting.conclavia.me`, Mongo esistente, backup, collaudi e task. Onboarding dispone di build standalone, Dockerfile non-root, esempio Compose con porta locale e controllo della configurazione all'avvio. `/api/health` verifica Mongo senza esporre dati. Il VPS è disponibile su **64.177.50.65**, con accesso SSH a chiave e Docker installato. I due DNS e il tunnel Mongo persistente verso Unmatt sono configurati; Meeting e Onboarding sono attivi in HTTPS in modalità collaudo, con AI e bot reali disattivati. Release: `20260926120926576-091f8e`, costruita da commit puliti il 26 settembre.
+[Piano di rilascio Conclavia/Umatt](docs/production.md): dominio **conclavia.me**, Onboarding pubblico su `onboarding.conclavia.me` e Meeting privato su `meeting.conclavia.me`, Mongo esistente, backup, collaudi e task. Onboarding dispone di build standalone, Dockerfile non-root, esempio Compose con porta locale e controllo della configurazione all'avvio. `/api/health` verifica Mongo senza esporre dati. Il VPS è disponibile su **64.177.50.65**, con accesso SSH a chiave e Docker installato. I due DNS e il tunnel Mongo persistente verso Unmatt sono configurati; Meeting e Onboarding sono attivi in HTTPS in modalità collaudo, con AI e bot reali disattivati. Release: `20260926135040512-4aadff`, costruita da commit puliti il 26 settembre.
 
 Il pilot concordato usa **un VPS da 1 vCPU e 2 GB RAM per Meeting e Onboarding insieme**, Mongo esterno e immagini costruite sul Mac o in CI. Il collaudo combinato e il monitoraggio determineranno l'eventuale upgrade. Il progetto fratello **conclavia-deploy** automatizza build e rilascio coordinato, gateway autenticato, verifiche e rollback. La guida operativa è in [conclavia-deploy](https://github.com/vgflutter/conclavia-deploy/blob/main/README.md); il Compose interno rimane un esempio per il solo Onboarding.
 
@@ -98,6 +98,8 @@ I sottotitoli presentano la domanda, la frase dell'assistente e la trascrizione 
 Lo stile **Conclavia · Fotorealistico (beta)** usa il personaggio della homepage, con asset e renderer in `conclavia-avatar-kit`. Gli studi lo mostrano come scelta esplicita; nessun profilo reale viene migrato. Il Play nell’anteprima riproduce un benvenuto preregistrato IT/EN. Le risposte arbitrarie usano un labiale dinamico sperimentale: la qualità non è equivalente al video preregistrato e richiede accettazione audiovisiva prima dell’uso operativo. [Modalità, limiti e authoring](https://github.com/vgflutter/conclavia-avatar-kit/blob/main/docs/host/integration.md).
 
 I sei media vengono serviti da `/avatars/host-v1/[asset]`, con allowlist, richieste Range, HEAD ed ETag. Il tracing standalone include gli asset del kit; eseguire `npm run check:avatar-kit` prima delle build coordinate.
+
+La release del 26 settembre include il kit `bebd1a5`: espressione completa del volto, labbro superiore mobile e saluti IT/EN rigenerati con voce invariata. Superati i due test browser dell’host fotografico, 76 test unitari, lint, TypeScript e la build Linux coordinata con Meeting. [Procedura e limiti visivi](https://github.com/vgflutter/conclavia-avatar-kit/blob/main/docs/host/full-face-performance.md).
 
 ## Configurazione dell’integrazione
 
