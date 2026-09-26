@@ -12,3 +12,11 @@ Questa revisione conserva il lavoro già presente sul percorso vocale (interruzi
 Nessun provider a pagamento è stato chiamato dai test. Le suite opzionali `test:aihat` e `test:handoff` non sono state eseguite: richiedono accesso ai repository cliente, esclusi dall’ambito autorizzato attuale. Le modifiche preesistenti ai relativi fixture sono state conservate.
 
 La qualità del microfono reale, la trascrizione ricevuta da Teams, il salvataggio dal sito cliente e l’accettazione visiva del labiale arbitrario restano verifiche distinte. Il nuovo stile fotografico è una scelta sperimentale, non il default dei profili reali. Per il collegamento Umatt pubblico vedere [stato verificato](integration-status-2026-09-26.md).
+
+## Rilascio verificato
+
+Applicazioni `20260926082504698-d50e52`: Meeting `ff831e8`, Onboarding `f916c4f`, kit `2cc5462`, tutti da checkout puliti. Homepage `web-20260926082505776-c1ecf8`, sorgente Web `296780f`. I successivi commit di documentazione non modificano il codice distribuito.
+
+Sul dominio pubblico la suite browser IT/EN è passata con i nuovi media. I sei asset di ciascuna app e i quattro media pubblici corrispondono ai checksum canonici del kit; verificati ETag/304, Range/206, HEAD e accesso anonimo negato alle API gestionali. Entrambi i container applicativi e Nginx sono healthy. Il tunnel Mongo è attivo; AI disattivata e bot in preview sono stati conservati. La pubblicazione statica non ha riavviato le app; il rilascio applicativo ha superato le guardie sulle conversazioni.
+
+SSL/TLS verificato sui quattro domini, inclusi TLS 1.2/1.3 e redirect HTTP. I certificati Let's Encrypt scadono il 24 dicembre 2026. L’integrazione pubblica Umatt rimane rinviata fino alla definizione di origine e pagina di ritorno.
