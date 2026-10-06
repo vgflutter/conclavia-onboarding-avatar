@@ -4,6 +4,7 @@ import { baseUrl, bearer, hash, token, allowedReturnUrl } from './security';
 import { InputError, text, validateFlow, record } from './validation';
 import { message, publicSession } from './engine';
 import type { Session, Site } from './types';
+import { terminal } from './outcome';
 
 export async function siteForRequest(req: Request): Promise<Site> {
   const { sites } = await collections();
@@ -23,12 +24,13 @@ export async function createSession(site: Site, body: unknown) {
   if (!await limit(`create:${site._id}`, 100, 3600)) throw new InputError('Limite di sessioni raggiunto', 429);
   const flow = body.flow ? validateFlow(body.flow) : site.flows.find(f => f.id === body.flowId);
   if (!flow) throw new InputError('Percorso non disponibile');
-  const returnUrl = allowedReturnUrl(body.returnUrl, site.allowedOrigins);
+  const returnUrl = allowedReturnUrl(body.returnUrl ?? site.integration?.returnUrl, site.allowedOrigins);
+  const abandonUrl = allowedReturnUrl(body.abandonUrl ?? site.integration?.abandonUrl ?? returnUrl, site.allowedOrigins);
   const subject = text(body.subject, 'riferimento cliente', 150);
   const capability = token();
   const session: Session = {
     _id: randomUUID(), siteId: site._id, subject, flow, avatar: site.avatar,
-    context: site.context, siteName: site.name, returnUrl, tokenHash: hash(capability),
+    context: site.context, siteName: site.name, returnUrl, abandonUrl, tokenHash: hash(capability),
     tokenExpiresAt: new Date(Date.now() + 2 * 3600_000), expiresAt: new Date(Date.now() + 7 * 86400_000),
     createdAt: new Date(), answers: {}, skipped: [], status: 'in_progress', revision: 0,
     operations: [], messages: [message('assistant', `${flow.introduction} ${flow.questions[0].title}`)],
@@ -44,7 +46,7 @@ export async function mutate(session: Session, revision: unknown, operation: unk
   const { sessions } = await collections();
   if (session.operations.includes(operationId)) return publicSession(session);
   if (!Number.isInteger(revision) || revision !== session.revision) throw new InputError('La sessione è cambiata. Ricarica le risposte.', 409);
-  if (session.status === 'completed') throw new InputError('Sessione già confermata', 409);
+  if (terminal(session.status)) throw new InputError('Sessione già conclusa', 409);
   const lockId = randomUUID();
   const locked = await sessions.findOneAndUpdate({ _id: session._id, revision: session.revision,
     $or: [{ lockUntil: { $exists: false } }, { lockUntil: { $lt: new Date() } }] },
@@ -57,6 +59,7 @@ export async function mutate(session: Session, revision: unknown, operation: unk
         pendingAnswer: updated.pendingAnswer ?? null,
         status: updated.status, ...(updated.consentAt ? { consentAt: updated.consentAt } : {}),
         ...(updated.confirmedAt ? { confirmedAt: updated.confirmedAt } : {}),
+        ...(updated.abandonedAt ? { abandonedAt: updated.abandonedAt } : {}),
         operations: [...session.operations, operationId].slice(-500) },
       $inc: { revision: 1 }, $unset: { lockId: '', lockUntil: '' },
     }, { returnDocument: 'after' });

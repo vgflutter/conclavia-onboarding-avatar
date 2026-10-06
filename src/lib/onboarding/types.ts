@@ -25,24 +25,24 @@ export type Avatar = {
 export type Site = {
   _id: string; name: string; keyHash: string; allowedOrigins: string[];
   avatar: Avatar; context: string; flows: Flow[]; revision: number; updatedAt: Date;
-  integration?: { mode: 'redirect' | 'iframe'; returnUrl: string };
+  integration?: { mode: 'redirect' | 'iframe'; returnUrl: string; abandonUrl?: string };
 };
 export type Message = { id: string; role: 'user' | 'assistant'; text: string; at: string };
 export type PendingAnswer = { questionId: string; value: Answer | null };
 export type Session = {
   _id: string; siteId: string; subject: string; flow: Flow; avatar: Avatar;
-  context: string; siteName: string; returnUrl: string;
+  context: string; siteName: string; returnUrl: string; abandonUrl?: string;
   tokenHash: string; tokenExpiresAt: Date; expiresAt: Date; createdAt: Date;
   answers: Answers; skipped: string[]; messages: Message[]; operations: string[];
-  status: 'in_progress' | 'review' | 'completed'; revision: number;
-  consentAt?: string; confirmedAt?: string;
+  status: 'in_progress' | 'review' | 'completed' | 'abandoned'; revision: number;
+  consentAt?: string; confirmedAt?: string; abandonedAt?: string;
   pendingAnswer?: PendingAnswer | null;
   turns: number; speechRequests: number; realtimeConnections: number;
 };
 export type SessionView = {
-  id: string; siteName: string; flow: Flow; avatar: Avatar; returnUrl: string;
+  id: string; siteName: string; flow: Flow; avatar: Avatar; returnUrl: string; abandonUrl?: string;
   answers: Answers; skipped: string[]; messages: Message[];
-  status: Session['status']; revision: number; consentAt?: string; confirmedAt?: string;
+  status: Session['status']; revision: number; consentAt?: string; confirmedAt?: string; abandonedAt?: string;
   expiresAt: string;
   pendingAnswer?: PendingAnswer | null;
 };

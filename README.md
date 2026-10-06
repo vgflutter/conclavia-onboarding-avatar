@@ -105,6 +105,8 @@ Rifinitura finale degli occhi: l'ombra aggiunta durante i semibattiti passa da i
 
 ## Configurazione dell’integrazione
 
-La scheda **04 Integrazione** mostra il percorso sito → Conclavia → server del sito, permette di salvare pagina dedicata/iframe e URL di ritorno, e genera esempi backend/browser con una guida scaricabile senza chiavi. Il ritorno deve appartenere alle origini autorizzate. Le preferenze aiutano a costruire l’adapter: non lo installano e non sostituiscono il `returnUrl` esplicito richiesto dall’API. Una prova nello Studio non certifica l’integrazione con Umatt. [Contratto e verifica](docs/integration.md).
+La scheda **04 Integrazione** mostra il percorso sito → Conclavia → server del sito, permette di salvare pagina dedicata/iframe e URL di ritorno, e genera esempi backend/browser con una guida scaricabile senza chiavi. Il ritorno deve appartenere alle origini autorizzate. Le preferenze aiutano a costruire l’adapter: non lo installano e forniscono i valori predefiniti di `returnUrl` e `abandonUrl`, sovrascrivibili dal backend all’avvio della sessione. Una prova nello Studio non certifica l’integrazione con Umatt. [Contratto e verifica](docs/integration.md).
 
 [Verifica del 26 settembre 2026](docs/verification-2026-09-26.md): prove automatiche, limiti del collaudo e stato distinto dell’integrazione pubblica Umatt.
+
+Lo Studio salva avatar, contesto, percorsi e ritorni anche alla prima creazione del cliente e permette di rigenerare la chiave API. Il percorso registra ora un abbandono esplicito distinto dalla pausa; il sito verifica successo/abbandono attraverso le API autenticate. [Configurazione, chiavi ed esiti](docs/integration.md#configurare-il-cliente-e-gestire-la-chiave-api).

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { riskFlow, portfolioFlow, portfolioDraft, validateHostAnswers } from '../../aihat-client/lib/onboarding/questionnaires';
 import { validateFlow, validateAnswer, activeQuestions } from '../src/lib/onboarding/validation';
-import { completionErrors } from '../src/lib/onboarding/engine';
+import { completionErrors, applyInterpretation } from '../src/lib/onboarding/engine';
 
 const require = createRequire(import.meta.url);
 const backend = require('../../aihat-server/src/services/investorRiskProfile.service.js');
@@ -55,4 +55,13 @@ test('host revalidates incompatible or unexpected result data', () => {
   assert.throws(() => portfolioDraft(portfolioAnswers({ preferenceTags: ['unrecognized'] })));
   assert.throws(() => portfolioDraft(portfolioAnswers({ hasWithdrawal: 'yes' })));
   assert.throws(() => portfolioDraft(portfolioAnswers({ allocationMode: 'manual', equities: 60, bonds: 50, commodities: 0, cash: 0 })));
+});
+
+test('spoken portfolio entry does not record import or reach review before confirmation', () => {
+  const flow = portfolioFlow();
+  const session = { flow, answers: {}, skipped: [], messages: [], status: 'in_progress', pendingAnswer: null };
+  const updated = applyInterpretation(session, 'Voglio importare un portafoglio', { action: 'answer', questionId: 'portfolioType', valueJson: '"import"', explanation: '' });
+  assert.deepEqual(updated.answers, {});
+  assert.equal(updated.status, 'in_progress');
+  assert.deepEqual(updated.pendingAnswer, { questionId: 'portfolioType', value: 'import' });
 });

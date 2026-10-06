@@ -193,3 +193,26 @@ test('a percentage selection maps through the exact native ID without coercing i
   const result = await interpret(s, '-40%');
   assert.equal(applyInterpretation(s, '-40%', result).answers.choice, 'loss_40');
 });
+
+test('isolated voice indexes from the audit cannot save a categorical choice or reach review', async t => {
+  const s = session([{ ...choice, options: [{ id: 'new', label: 'Creare un nuovo portafoglio' }, { id: 'import', label: 'Importare un portafoglio esistente' }] }]);
+  const calls = provider(t, answer('choice', 'import'));
+  for (const text of ['2.', '2. Sì', '3']) {
+    const result = await interpret(s, text, 'voice');
+    const updated = applyInterpretation(s, text, result);
+    assert.equal(result.action, 'clarify');
+    assert.deepEqual(updated.answers, {});
+    assert.equal(updated.status, 'in_progress');
+  }
+  assert.equal(calls.length, 0);
+});
+
+test('an explicit spoken ordinal remains valid but a marked selection requires confirmation', async t => {
+  const s = session([{ ...choice, confirmSpoken: true }]);
+  provider(t, answer('choice', 'manual'));
+  const result = await interpret(s, 'La seconda opzione', 'voice');
+  const updated = applyInterpretation(s, 'La seconda opzione', result);
+  assert.deepEqual(updated.answers, {});
+  assert.deepEqual(updated.pendingAnswer, { questionId: 'choice', value: 'manual' });
+  assert.equal(updated.status, 'in_progress');
+});

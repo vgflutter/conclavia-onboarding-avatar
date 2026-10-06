@@ -54,7 +54,7 @@ test('a customer completes the conditional onboarding, corrects a branch, review
   const launch = await create(request);
   const errors: string[] = []; page.on('pageerror', e => errors.push(e.message));
   await page.goto(launch.url);
-  await page.getByRole('checkbox').check(); await page.getByRole('button', { name: 'Continua scrivendo' }).click();
+  await page.getByRole('button', { name: 'Continua scrivendo' }).click();
   await page.getByRole('textbox', { name: 'Come preferisci essere chiamato?' }).fill('Mario');
   await page.getByRole('button', { name: 'Conferma risposta' }).click();
   await page.getByRole('button', { name: 'Per la mia attività' }).click(); await page.getByRole('button', { name: 'Conferma risposta' }).click();
@@ -214,7 +214,7 @@ test('an allowed cross-origin iframe completes and sends only its session ID to 
   try {
     await page.goto('http://localhost:3116/embed');
     const frame = page.frameLocator('#onboarding');
-    await frame.getByRole('checkbox').check(); await frame.getByRole('button', { name: 'Continua scrivendo' }).click();
+    await frame.getByRole('button', { name: 'Continua scrivendo' }).click();
     await frame.getByRole('textbox', { name: 'Come preferisci essere chiamato?' }).fill('Mario');
     await frame.getByRole('button', { name: 'Conferma risposta' }).click();
     await frame.getByRole('button', { name: 'Conferma tutte le risposte' }).click();
@@ -276,9 +276,59 @@ test('review is not completion and a confirmed result cannot be silently edited'
   const resultUrl = `${root}/result?subject=fictional-user`;
   expect((await request.get(resultUrl, { headers: { Authorization: `Bearer ${key}` } })).status()).toBe(409);
   await post('complete', {});
+  expect((await post('complete', {})).status).toBe('completed');
+  expect((await request.post(`${root}/abandon`, { headers: auth, data: { revision, operationId: randomUUID() } })).status()).toBe(409);
   const final = await (await request.get(resultUrl, { headers: { Authorization: `Bearer ${key}` } })).json();
   expect(final.answers).toEqual({ name: 'Confirmed customer', activity: 'personal', goal: 'Start safely' });
   expect((await request.post(`${root}/answer`, { headers: auth, data: { revision, operationId: randomUUID(), questionId: 'name', value: 'Unconfirmed replacement' } })).status()).toBe(409);
   const unchanged = await (await request.get(resultUrl, { headers: { Authorization: `Bearer ${key}` } })).json();
   expect(unchanged.answers).toEqual(final.answers); expect(unchanged.confirmedAt).toBe(final.confirmedAt);
+});
+
+test('a new customer saves avatar, flow and callback configuration together; key rotation is authenticated and revision guarded', async ({ request }) => {
+  await request.post('/api/admin/login', { headers, data: { token: process.env.ONBOARDING_ADMIN_TOKEN } });
+  const configuration = { id: 'configured-customer', name: 'Configured customer', avatar: { ...defaultAvatar, name: 'Ada' },
+    context: 'Only synthetic context', allowedOrigins: [origin], flows: [exampleFlow],
+    integration: { mode: 'redirect', returnUrl: `${origin}/return`, abandonUrl: `${origin}/cancel` } };
+  const response = await request.post('/api/admin/sites', { headers, data: configuration });
+  expect(response.status()).toBe(201); expect(response.headers()['cache-control']).toBe('no-store');
+  const customer = await response.json();
+  expect(customer.site.flows).toEqual([exampleFlow]); expect(customer.site.avatar.name).toBe('Ada'); expect(customer.site.keyHash).toBeUndefined();
+  expect(customer.apiKey).toMatch(/^[A-Za-z0-9_-]{43}$/);
+  const start = () => request.post('/api/v1/sessions', { headers: { Authorization: `Bearer ${customer.apiKey}` }, data: { subject: 'synthetic', flowId: exampleFlow.id } });
+  const session = await (await start()).json();
+  const view = await (await request.get(`/api/v1/sessions/${session.sessionId}`, { headers: { Authorization: `Bearer ${new URL(session.url).hash.slice(1)}` } })).json();
+  expect(view.returnUrl).toBe(configuration.integration.returnUrl); expect(view.abandonUrl).toBe(configuration.integration.abandonUrl);
+  const endpoint = `/api/admin/sites/${customer.site._id}/rotate-key`;
+  expect((await request.post(endpoint, { headers: { origin: 'https://foreign.example' }, data: { revision: 1 } })).status()).toBe(403);
+  expect((await request.post(endpoint, { headers, data: { revision: 0 } })).status()).toBe(409);
+  const rotated = await (await request.post(endpoint, { headers, data: { revision: 1 } })).json();
+  expect(rotated.apiKey).not.toBe(customer.apiKey); expect(rotated.site.revision).toBe(2);
+  expect((await start()).status()).toBe(401);
+  customer.apiKey = rotated.apiKey; expect((await start()).status()).toBe(201);
+  expect((await request.get(`/api/v1/sessions/${session.sessionId}/status?subject=synthetic`, { headers: { Authorization: `Bearer ${customer.apiKey}` } })).status()).toBe(200);
+  const listed = await (await request.get('/api/admin/sites')).json();
+  expect(JSON.stringify(listed)).not.toContain(rotated.apiKey); expect(JSON.stringify(listed)).not.toContain('keyHash');
+  expect((await request.post('/api/admin/sites', { headers, data: { ...configuration, id: 'invalid-flows', flows: [exampleFlow, exampleFlow] } })).status()).toBe(400);
+});
+
+test('leaving before consent records abandonment and returns its verified outcome without any result', async ({ page, request }) => {
+  const session = await create(request);
+  await page.goto(session.url);
+  await page.getByRole('button', { name: 'Interrompi e torna al sito' }).click();
+  await expect(page).toHaveURL(new RegExp(`/return\\?onboardingSession=${session.sessionId}&onboardingStatus=abandoned`));
+  const root = `/api/v1/sessions/${session.sessionId}`;
+  const siteHeaders = { Authorization: `Bearer ${key}` };
+  const status = await (await request.get(`${root}/status?subject=fictional-user`, { headers: siteHeaders })).json();
+  expect(status.status).toBe('abandoned'); expect(status.abandonedAt).toBeTruthy(); expect(status.answers).toBeUndefined();
+  expect((await request.get(`${root}/status?subject=another-user`, { headers: siteHeaders })).status()).toBe(404);
+  expect((await request.get(`${root}/status?subject=fictional-user`, { headers: { Authorization: `Bearer ${otherKey}` } })).status()).toBe(404);
+  expect((await request.get(`${root}/result?subject=fictional-user`, { headers: siteHeaders })).status()).toBe(409);
+  expect((await request.post(`${root}/resume`, { headers: siteHeaders, data: { subject: 'fictional-user' } })).status()).toBe(404);
+  const capability = { origin, Authorization: `Bearer ${new URL(session.url).hash.slice(1)}` };
+  expect((await request.post(`${root}/abandon`, { headers: capability, data: { revision: 0, operationId: randomUUID() } })).status()).toBe(200);
+  expect((await request.post(`${root}/complete`, { headers: capability, data: { revision: status.revision, operationId: randomUUID() } })).status()).toBe(409);
+  const latest = await (await request.get(`${root}/status?subject=fictional-user`, { headers: siteHeaders })).json();
+  expect(latest.abandonedAt).toBe(status.abandonedAt);
+  await page.goto(session.url); await expect(page.getByRole('heading', { name: 'Percorso interrotto' })).toBeVisible();
 });

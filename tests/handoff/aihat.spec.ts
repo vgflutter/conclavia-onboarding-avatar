@@ -95,19 +95,22 @@ async function writesFor(request: APIRequestContext, email: string) {
 }
 const portfolioValues = { portfolioType: 'new', objective: 'moderate_growth', incomeNeed: 'none', horizonBucket: '3_7y', hasWithdrawal: 'no', amount: 12500, baseCurrency: 'CHF', riskUsage: 'auto', currencyHedge: 'dont_know', geos: ['global'], instruments: 'etf_only', allocationMode: 'auto' };
 
-test('complete real risk UI, explicit host save and second avatar lead to portfolio review without creating investments', async ({ page, context }) => {
+test('complete risk and portfolio through the real UI, save only the profile and return confirmed answers without creating investments', async ({ page, context }) => {
   test.setTimeout(150_000);
+  const errors: string[] = []; page.on('pageerror', error => errors.push(error.message));
   const email = 'chain-avatar@example.test';
   await configure(context.request, email, { hasProfile: false }); await login(context, email);
   await page.goto(`${host}/portfolio/create?mode=new`);
   await page.getByRole('button', { name: 'Inizia con l’avatar' }).click();
   await page.waitForURL(`${service}/s/**`);
+  await expect(page.getByRole('button', { name: 'Continua scrivendo', exact: true })).toBeEnabled();
+  await page.screenshot({ path: 'test-results/avatar-risk-welcome.png', fullPage: true, animations: 'disabled' });
   const session = { sessionId: new URL(page.url()).pathname.split('/').at(-1)! };
   const record = await (await collections()).sessions.findOne({ _id: session.sessionId });
   if (!record) throw new Error('Synthetic session missing');
   const view = { flow: record.flow };
   const answers: Answers = {};
-  await page.getByRole('checkbox').check(); await page.getByRole('button', { name: 'Continua scrivendo' }).click();
+  await page.getByRole('button', { name: 'Continua scrivendo' }).click();
   for (const q of view.flow.questions) {
     await expect(page.getByRole('heading', { name: q.title, exact: true })).toBeVisible();
     const option = q.options!.at(-1)!;
@@ -119,7 +122,9 @@ test('complete real risk UI, explicit host save and second avatar lead to portfo
   await page.reload();
   await page.getByRole('button', { name: 'Conferma tutte le risposte' }).click();
   await page.getByRole('link', { name: 'Continua su AIHat' }).click();
+  await expect(page).toHaveURL(new RegExp(`/portfolio/create.*onboardingSession=${session.sessionId}.*onboardingStatus=success`));
   await expect(page.getByRole('heading', { name: 'Conferma profilo', exact: true })).toBeVisible();
+  await page.screenshot({ path: 'test-results/avatar-risk-host-review.png', fullPage: true, animations: 'disabled' });
   expect(await writesFor(context.request, email)).toEqual([]);
   await page.getByRole('button', { name: 'Avanti al portafoglio', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Continua con l’avatar', exact: true })).toBeVisible();
@@ -128,15 +133,53 @@ test('complete real risk UI, explicit host save and second avatar lead to portfo
   expect(Object.keys(writes[0].body.answers as object)).toHaveLength(view.flow.questions.length);
   await page.getByRole('button', { name: 'Continua con l’avatar', exact: true }).click();
   await page.waitForURL(`${service}/s/**`);
-  const second = await launch(context.request, 'portfolio', 'create');
-  expect(second.sessionId).not.toBe(session.sessionId);
-  await fill(context.request, second, portfolioValues);
-  await page.goto(second.url); await page.reload(); await page.getByRole('link', { name: 'Continua su AIHat' }).click();
+  const secondId = new URL(page.url()).pathname.split('/').at(-1)!;
+  expect(secondId).not.toBe(session.sessionId);
+  const second = await (await collections()).sessions.findOne({ _id: secondId });
+  if (!second) throw new Error('Synthetic portfolio session missing');
+  const supplied: Answers = { ...portfolioValues, hasWithdrawal: 'yes', withdrawalAmount: 1250,
+    withdrawalMonth: '2028-06', withdrawalProbability: 'probable', allocationMode: 'manual',
+    equities: 50, bonds: 30, commodities: 10, cash: 10, note: 'Preferenza sintetica di verifica' };
+  const saved: Answers = {};
+  await page.getByRole('button', { name: 'Continua scrivendo' }).click();
+  for (const q of second.flow.questions) {
+    if (q.when && !q.when.values.includes(String(saved[q.when.field]))) continue;
+    await expect(page.getByRole('heading', { name: q.title, exact: true })).toBeVisible();
+    const value = supplied[q.id];
+    if (value === undefined) {
+      expect(q.required).toBe(false);
+      await page.getByRole('button', { name: 'Salta', exact: true }).click();
+      continue;
+    }
+    if (q.options) {
+      for (const choice of Array.isArray(value) ? value : [value]) {
+        const option = q.options.find(option => option.id === choice)!;
+        await page.getByRole('group', { name: q.title, exact: true }).getByRole('button', { name: option.label, exact: true }).click();
+      }
+    } else {
+      await page.getByLabel(q.title, { exact: true }).fill(String(value));
+    }
+    await page.getByRole('button', { name: 'Conferma risposta' }).click();
+    saved[q.id] = value;
+  }
+  await expect(page.getByRole('heading', { name: 'Rivediamo le tue risposte.' })).toBeVisible();
+  await page.reload();
+  await page.screenshot({ path: 'test-results/avatar-portfolio-review.png', fullPage: true, animations: 'disabled' });
+  await page.getByRole('button', { name: 'Conferma tutte le risposte' }).click();
+  await page.getByRole('link', { name: 'Continua su AIHat' }).click();
+  await expect(page).toHaveURL(new RegExp(`/portfolio/create.*onboardingSession=${secondId}.*onboardingStatus=success`));
   await expect(page.getByRole('heading', { name: 'Revisione', exact: true })).toBeVisible();
   await expect(page.getByText(/CHF 12[,.]500/, { exact: true })).toBeVisible();
   await page.reload();
   await expect(page.getByRole('button', { name: 'Genera portafoglio', exact: true })).toBeEnabled();
+  await expect(page.getByText(/Azioni 50%.*Obbligazioni 30%.*Materie prime 10%.*Liquidit/)).toBeVisible();
+  await expect(page.getByText(/CHF 1[,.]?250.*2028-06/)).toBeVisible();
+  await page.screenshot({ path: 'test-results/avatar-portfolio-host-review.png', fullPage: true, animations: 'disabled' });
+  // The summary reports whether notes exist; their editable text is in Preferences.
+  await page.getByRole('button', { name: 'Preferenze', exact: true }).click();
+  await expect(page.getByRole('textbox')).toHaveValue('Preferenza sintetica di verifica');
   expect(await writesFor(context.request, email)).toHaveLength(1);
+  expect(errors).toEqual([]);
 });
 
 test('failed profile submit preserves review and retries once before allowing the manual portfolio route', async ({ page, context }) => {
@@ -198,7 +241,24 @@ test('unfinished session is rejected by the host; original service answers remai
   await expect(page.locator('p[role=alert]')).toContainText('non è disponibile');
   expect(await writesFor(context.request, email)).toEqual([]);
   const resumed = await launch(context.request, 'portfolio', 'create'); expect(resumed.sessionId).toBe(session.sessionId);
-  await page.goto(resumed.url); await expect(page.getByRole('checkbox')).not.toBeChecked();
+  await page.goto(resumed.url); await expect(page.getByRole('button', { name: 'Continua scrivendo', exact: true })).toBeEnabled();
+});
+
+test('explicit abandonment returns to the host choice without applying answers and a restart creates a new session', async ({ page, context }) => {
+  const email = 'abandoned-avatar@example.test'; await login(context, email);
+  const first = await launch(context.request, 'risk', 'investor');
+  await page.goto(first.url);
+  await page.getByRole('button', { name: 'Interrompi e torna al sito' }).click();
+  await page.waitForURL(new RegExp(`/investor.*onboardingSession=${first.sessionId}.*onboardingStatus=abandoned`), { timeout: 30_000 });
+  await expect(page.getByText('Hai interrotto il percorso con l’avatar. Nessuna risposta è stata applicata. Puoi ricominciare oppure scegliere il questionario.')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Inizia con l’avatar' })).toBeVisible();
+  expect(await writesFor(context.request, email)).toEqual([]);
+  const second = await launch(context.request, 'risk', 'investor'); expect(second.sessionId).not.toBe(first.sessionId);
+  const portfolio = await launch(context.request, 'portfolio', 'create');
+  await page.goto(portfolio.url); await page.getByRole('button', { name: 'Interrompi e torna al sito' }).click();
+  await page.waitForURL(new RegExp(`/portfolio/create.*onboardingSession=${portfolio.sessionId}.*onboardingStatus=abandoned`), { timeout: 30_000 });
+  await expect(page.getByText('Hai interrotto il percorso con l’avatar. Nessuna risposta è stata applicata. Puoi ricominciare oppure scegliere il questionario.')).toBeVisible();
+  expect(await writesFor(context.request, email)).toEqual([]);
 });
 
 test('English mobile host launch failure offers the manual route without disclosing server details', async ({ page, context }) => {

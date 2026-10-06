@@ -31,7 +31,7 @@ export function Studio() {
   const [apiKey, setApiKey] = useState('');
   const [creating, setCreating] = useState(false);
   const [integrationOrigin, setIntegrationOrigin] = useState('');
-  const [stats, setStats] = useState({ active: 0, completed: 0 });
+  const [stats, setStats] = useState({ active: 0, completed: 0, abandoned: 0 });
   const [providers, setProviders] = useState({ intelligence: false, voice: false });
   function choose(site: PublicSite) { setDraft(structuredClone(site)); setFlowsJson(JSON.stringify(site.flows, null, 2)); setNotice(''); setError(''); setCreating(false); setApiKey(''); }
   function chooseStyle(visualStyle: Site['avatar']['visualStyle']) {
@@ -81,6 +81,17 @@ export function Studio() {
     setDraft({ _id: '', name: '', allowedOrigins: ['http://localhost:3001'], avatar: { ...defaultAvatar }, context: '', flows: [], revision: 0, updatedAt: new Date() });
     setFlowsJson('[]'); setCreating(true); setTab('integration'); setApiKey(''); setError(''); setNotice('');
   }
+  async function rotateKey() {
+    if (!draft || creating || busy) return;
+    setBusy(true); setError(''); setNotice('');
+    try {
+      const data = await api(`sites/${draft._id}/rotate-key`, 'POST', { revision: draft.revision });
+      // Preserve unsaved avatar, context and integration edits.
+      setDraft({ ...draft, revision: data.site.revision, updatedAt: data.site.updatedAt });
+      setSites(current => current.map(site => site._id === data.site._id ? data.site : site));
+      setApiKey(data.apiKey); setNotice('Nuova chiave generata. Copiala nel backend del sito: la chiave precedente non è più valida.');
+    } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
+  }
   async function preview(flowId: string) {
     if (!draft) return;
     setBusy(true); setError('');
@@ -95,7 +106,7 @@ export function Studio() {
   return <div className="studio"><aside className="sidebar"><Link href="/" className="wordmark" style={{ textDecoration: 'none' }}>conclavia<span>ONBOARDING STUDIO</span></Link>
     <nav><button className="selected" onClick={() => setTab('avatar')}>◉ &nbsp; Il tuo onboarding</button><button onClick={newSite}>＋ &nbsp; Aggiungi sito</button></nav>
     <div className="sidebar-foot"><p>Una conversazione,<br />un passo alla volta.</p><button className="quiet" onClick={async () => { await api('logout', 'POST'); setLogged(false); setDraft(null); }}>Esci</button></div></aside>
-    <main className="studio-main"><header className="row spread studio-header"><span className="eyebrow" style={{ margin: 0 }}>Workspace / Configurazione</span><span className="pill">{stats.active} in corso · {stats.completed} completati</span></header>
+    <main className="studio-main"><header className="row spread studio-header"><span className="eyebrow" style={{ margin: 0 }}>Workspace / Configurazione</span><span className="pill">{stats.active} in corso · {stats.completed} completati · {stats.abandoned} interrotti</span></header>
       <div className="studio-title row spread"><div><h1>Un’accoglienza che ti somiglia.</h1><p>Prepara l’avatar, il contesto e le domande. Al resto pensa la conversazione.</p></div></div>
       {error && <p role="alert" className="notice error">{error}</p>}{notice && <p role="status" className="notice">{notice}</p>}
       {!draft ? <div className="card"><h2>Il primo sito</h2><p>Crea un sito per iniziare a configurare il tuo onboarding.</p><button className="primary" onClick={newSite}>Aggiungi sito</button></div> : <>
@@ -120,7 +131,7 @@ export function Studio() {
             <button onClick={() => { const next = [...draft.flows.filter(f => f.id !== exampleFlow.id), exampleFlow]; setDraft({ ...draft, flows: next }); setFlowsJson(JSON.stringify(next, null, 2)); }}>Aggiungi percorso di esempio</button>
             <details><summary>Definizione dei percorsi · editor avanzato</summary><p className="small">Domande, opzioni, condizioni e vincoli. Il salvataggio controlla lo schema.</p><label>Schema dei percorsi<textarea className="code" rows={20} value={flowsJson} onChange={e => setFlowsJson(e.target.value)} /></label></details>
           </>}
-          {tab === 'integration' && <IntegrationPanel key={draft._id} site={draft} onChange={setDraft} creating={creating} apiKey={apiKey} origin={integrationOrigin} />}
+          {tab === 'integration' && <IntegrationPanel key={draft._id} site={draft} onChange={setDraft} creating={creating} apiKey={apiKey} origin={integrationOrigin} onRotateKey={rotateKey} busy={busy} />}
           <div className="form-actions row spread"><span className="small muted">Le sessioni in corso mantengono la loro configurazione.</span><button className="primary" disabled={busy} onClick={save}>{busy ? 'Salvataggio…' : creating ? 'Crea sito' : 'Salva modifiche'} →</button></div>
         </section><aside className="preview"><div className="preview-avatar"><BusinessAvatar appearance={draft.avatar.appearance} visualStyle={draft.avatar.visualStyle} mood="friendly" voiceLevel={0} welcomeLanguage="it" /></div><div className="preview-caption"><div className="row spread"><h3>{draft.avatar.name || 'Il tuo avatar'}</h3><span className="pill">Anteprima</span></div><p className="small" style={{ margin: '10px 0 0' }}>Qui per accompagnarti, una domanda alla volta.</p></div></aside></div>
         <p className="small muted" style={{ marginTop: 24 }}>Conversazione: {providers.intelligence ? 'configurata' : 'da configurare'} · Voce: {providers.voice ? 'configurata' : 'da configurare'}</p>

@@ -40,7 +40,7 @@ Il sito fornisce domanda, opzioni e descrizioni nella lingua scelta con `flow.lo
 
 ## 2. Recuperare il risultato dal server
 
-La pagina di completamento torna a `returnUrl`, aggiungendo `onboardingSession=<id>`; nessuna risposta nel redirect. Il backend autenticato del sito chiama:
+La pagina di completamento torna a `returnUrl`, aggiungendo `onboardingSession=<id>&onboardingStatus=success`; nessuna risposta nel redirect. Il backend autenticato del sito chiama:
 
 `GET /api/v1/sessions/<id>/result?subject=<riferimento-opaco>`
 
@@ -59,7 +59,7 @@ con la propria chiave sito. Risposta:
 
 Il sito verifica sessione, soggetto autenticato, conferma, versione e schema, poi presenta il proprio riepilogo. Il completamento dell’avatar non è l’autorizzazione a creare ordini, portafogli o altre operazioni del sito.
 
-`POST /api/v1/sessions/<id>/resume` con `{ subject, flowVersion }` restituisce una nuova URL per una sessione incompleta: la capability precedente viene invalidata. Non riprende sessioni scadute, completate o di altri clienti/siti.
+`POST /api/v1/sessions/<id>/resume` con `{ subject, flowVersion }` restituisce una nuova URL per una sessione incompleta: la capability precedente viene invalidata. Non riprende sessioni scadute, completate, abbandonate esplicitamente o di altri clienti/siti.
 
 Il servizio conserva lo schema originale della sessione. Se `flowVersion` non coincide, la ripresa restituisce `404`, come per una sessione non più disponibile. Un timeout o un errore temporaneo non prova che la sessione sia persa: il sito conserva il suo riferimento e permette un nuovo tentativo. L'adattatore Unmatt crea una nuova sessione solo dopo un `404`.
 
@@ -86,9 +86,10 @@ const expectedSessionId = launched.sessionId; // ricevuto dal backend del sito
 frame.src = launched.url;
 window.addEventListener('message', event => {
   if (event.origin !== expectedOrigin || event.source !== frame.contentWindow) return;
-  if (event.data?.type !== 'conclavia.completed' || event.data.sessionId !== expectedSessionId) return;
-  // Il backend autenticato del sito recupera e valida il risultato.
-  window.location.assign(`/onboarding/riepilogo?onboardingSession=${encodeURIComponent(expectedSessionId)}`);
+  if (!['conclavia.completed', 'conclavia.abandoned'].includes(event.data?.type) || event.data.sessionId !== expectedSessionId) return;
+  // Il backend verifica sempre sessione, identità e stato; il messaggio non è una prova.
+  const status = event.data.type === 'conclavia.completed' ? 'success' : 'abandoned';
+  window.location.assign(`/onboarding/riepilogo?onboardingSession=${encodeURIComponent(expectedSessionId)}&onboardingStatus=${status}`);
 });
 ```
 
@@ -134,8 +135,26 @@ Solo un amministratore Conclavia autenticato può esportare `GET /api/admin/site
 
 ## Pannello di integrazione
 
-In **Studio → 04 Integrazione** l’operatore configura le origini del sito, la modalità `redirect` o `iframe` e la pagina di ritorno. Il salvataggio esplicito conserva `site.integration = { mode, returnUrl }`, con controllo della revisione e dell’origine; i client amministrativi precedenti che omettono il campo conservano le preferenze esistenti. Nessuna migrazione delle sessioni pubblicate.
+In **Studio → 04 Integrazione** l’operatore configura le origini del sito, la modalità `redirect` o `iframe` e la pagina di ritorno. Il salvataggio esplicito conserva `site.integration = { mode, returnUrl, abandonUrl? }`, con controllo della revisione e dell’origine; i client amministrativi precedenti che omettono il campo conservano le preferenze esistenti. Nessuna migrazione delle sessioni pubblicate.
 
-Queste impostazioni sono indicazioni per l’adapter e per gli esempi esportati: `POST /api/v1/sessions` continua a richiedere un `returnUrl` esplicito. Un backend può inviare il proprio `flow` oppure usare un `flowId` salvato. La guida scaricabile contiene le impostazioni di lavoro e funzioni di partenza, mai la chiave del sito. Autenticazione del cliente, associazione server fra cliente e sessione, validazione della versione e salvataggio idempotente restano responsabilità del sito.
+Le URL configurate nello Studio sono usate come valori predefiniti da `POST /api/v1/sessions`; il backend può sovrascrivere `returnUrl` e `abandonUrl` per ogni sessione. Se la pagina di abbandono non è indicata si usa quella di ritorno. Gli indirizzi vengono verificati sulle origini autorizzate e conservati nello snapshot della sessione. Senza una pagina di ritorno configurata o esplicita, la creazione è rifiutata. Un backend può inviare il proprio `flow` oppure usare un `flowId` salvato. La guida scaricabile contiene le impostazioni di lavoro e funzioni di partenza, mai la chiave del sito. Autenticazione del cliente, associazione server fra cliente e sessione, validazione della versione e salvataggio idempotente restano responsabilità del sito.
 
-La pagina distingue configurazione da collaudo. Un’origine autorizzata, un Mongo raggiungibile o un’anteprima completata non provano che Umatt abbia ricevuto e salvato il risultato. Per verificarlo servono avvio dal sito, conferma, recupero autenticato del risultato e riscontro nel backend del sito. In questa revisione i repository del cliente non sono stati ispezionati né modificati; le schermate dimostrative usano solo `demo.example` e dati sintetici.
+La pagina distingue configurazione da collaudo. Un’origine autorizzata, un Mongo raggiungibile o un’anteprima completata non provano che Umatt abbia ricevuto e salvato il risultato. Per verificarlo servono avvio dal sito, conferma, recupero autenticato del risultato e riscontro nel backend del sito. I test handoff usano entrambi i frontend, un backend sintetico e un Mongo temporaneo. Non attestano il collegamento in produzione né l’utilizzo di un microfono reale.
+
+## Configurare il cliente e gestire la chiave API
+
+Nello Studio autenticato: **Aggiungi sito**, nome e identificatore, origini autorizzate; configura **Avatar**, **Contesto**, **Percorsi** e le pagine di ritorno in **Integrazione**, quindi **Crea sito**. I percorsi vengono validati e salvati anche durante la prima creazione. La chiave viene generata sul server con 32 byte casuali, conservata solo come hash e mostrata una volta. Copiarla nel backend del sito. Le risposte che contengono la chiave sono `no-store`.
+
+**Rigenera chiave API → Conferma rigenerazione** invalida immediatamente la chiave precedente. La rotazione richiede autenticazione amministrativa, origine dello Studio e revisione corrente (`POST /api/admin/sites/:siteId/rotate-key`, `{ revision }`). Non cambia gli snapshot delle sessioni. L’identità opaca `subject` deve restare stabile al cambio di chiave: nell’adapter AIHat impostare `CONCLAVIA_ONBOARDING_SUBJECT_SECRET` al valore della chiave precedente prima di ruotarla; poi aggiornare solo `CONCLAVIA_ONBOARDING_API_KEY`.
+
+## Abbandono esplicito e verifica dell’esito
+
+**Interrompi e torna al sito** registra `abandoned` sul server anche prima del consenso alla conversazione, arresta il microfono e ritorna a `abandonUrl` con `onboardingSession` e `onboardingStatus=abandoned`. In iframe emette `{ type: "conclavia.abandoned", sessionId }` al parent dell’origine di ritorno; il parent può chiudere l’iframe e gestire il ritorno. Non contiene risposte o credenziali. L’azione della pagina è `POST /api/v1/sessions/:id/abandon` con capability, origine Conclavia, `revision` e `operationId`.
+
+Il backend del sito verifica `GET /api/v1/sessions/:id/status?subject=<riferimento-opaco>` con la propria chiave. Riceve `sessionId`, `subject`, `flowId`, `flowVersion`, `status` e il timestamp `confirmedAt` o `abandonedAt`, senza risposte. Stati possibili: `in_progress`, `review`, `completed`, `abandoned`. La query del redirect e `postMessage` non sono fonti attendibili da sole. Le risposte complete restano disponibili esclusivamente tramite `/result` dopo una conferma verificata.
+
+Completamento e abbandono sono terminali e idempotenti: una ripetizione non cambia esito o timestamp; il tentativo di passare all’esito opposto viene rifiutato. Le modifiche in concorrenza usano la revisione e il lock della sessione. L’abbandono è registrato anche nell’audit amministrativo.
+
+Chiudere la scheda o perdere la connessione non prova un abbandono: la sessione incompleta resta riprendibile fino alla scadenza. Non si usa `beforeunload` come conferma affidabile. Un nuovo avvio dopo un abbandono crea una nuova sessione.
+
+La callback implementata è il ritorno HTTP del browser o l’evento iframe, verificato dal backend cliente. Un webhook automatico server-to-server richiede ancora l’endpoint destinatario e il relativo contratto operativo; non è attivato da queste impostazioni.

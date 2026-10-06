@@ -95,7 +95,6 @@ async function setup(page: Page, options: { locale?: 'it' | 'en'; deny?: boolean
   return { state: () => s, calls };
 }
 async function start(page: Page) {
-  await page.getByRole('checkbox').check();
   await page.getByRole('button', { name: 'Inizia a parlare', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Metti in pausa' })).toBeVisible();
 }
@@ -175,7 +174,7 @@ test('pause drops late audio; switching to writing preserves an unsent selection
 });
 test('microphone denial falls back to typing with a useful message and no provider details', async ({ page }) => {
   await setup(page, { deny: true });
-  await page.getByRole('checkbox').check(); await page.getByRole('button', { name: 'Inizia a parlare', exact: true }).click();
+  await page.getByRole('button', { name: 'Inizia a parlare', exact: true }).click();
   await expect(page.locator('main').getByRole('alert')).toContainText('permesso nel browser');
   await expect(page.getByRole('button', { name: 'Stabile', exact: true })).toBeVisible();
 });
@@ -240,7 +239,6 @@ test('a new typed draft survives the delayed response to the previous message', 
   let release!: () => void;
   const delayed = new Promise<void>(resolve => { release = resolve; });
   await page.route('**/turn', async route => { await delayed; await route.fallback(); });
-  await page.getByRole('checkbox').check();
   await page.getByRole('button', { name: 'Continua scrivendo' }).click();
   const input = page.getByRole('textbox', { name: 'Scrivi una risposta o chiedi un chiarimento' });
   await input.fill('stabile');

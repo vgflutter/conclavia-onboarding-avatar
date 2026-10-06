@@ -4,10 +4,11 @@ import type { Site } from '@/lib/onboarding/types';
 import styles from './IntegrationPanel.module.css';
 
 type PublicSite = Omit<Site, 'keyHash'>;
-export function IntegrationPanel({ site, onChange, creating, apiKey, origin }: {
-  site: PublicSite; onChange: (site: PublicSite) => void; creating: boolean; apiKey: string; origin: string;
+export function IntegrationPanel({ site, onChange, creating, apiKey, origin, onRotateKey, busy }: {
+  site: PublicSite; onChange: (site: PublicSite) => void; creating: boolean; apiKey: string; origin: string; onRotateKey: () => Promise<void>; busy: boolean;
 }) {
   const [copied, setCopied] = useState('');
+  const [rotating, setRotating] = useState(false);
   const integration = site.integration ?? { mode: 'redirect' as const, returnUrl: '' };
   const publicOrigin = site.allowedOrigins.some(value => {
     try { const url = new URL(value); return url.protocol === 'https:' && !['localhost', '127.0.0.1', '[::1]'].includes(url.hostname); }
@@ -27,6 +28,7 @@ export async function startOnboarding(subject, flow) {
     method: 'POST', headers, cache: 'no-store',
     body: JSON.stringify({ subject, flow,
       returnUrl: ${JSON.stringify(integration.returnUrl || 'https://your-site.example/onboarding/return')},
+      abandonUrl: ${JSON.stringify(integration.abandonUrl || integration.returnUrl || 'https://your-site.example/onboarding/return')},
     }),
   });
   if (!response.ok) throw new Error('Avvio non riuscito');
@@ -51,19 +53,21 @@ export async function readConfirmedResult(sessionId, subject) {
 if (new URL(launched.url).origin !== ${JSON.stringify(origin)}) throw new Error('Origine non valida');
 window.location.assign(launched.url);
 // Al ritorno, chiedi al tuo backend di verificare il risultato.
+// onboardingStatus=success|abandoned è solo un suggerimento per la UI.
+// Verifica lo stato con GET /api/v1/sessions/:id/status?subject=... dal backend.
 // Il solo ritorno alla pagina non prova che il cliente abbia confermato.`
     : `// launched arriva dal TUO backend autenticato.
 const expectedOrigin = ${JSON.stringify(origin)};
 if (new URL(launched.url).origin !== expectedOrigin) throw new Error('Origine non valida');
 const frame = document.createElement('iframe');
 frame.title = 'Onboarding Conclavia';
-frame.allow = 'microphone; camera';
+frame.allow = 'microphone';
 frame.src = launched.url;
 document.querySelector('#onboarding').append(frame);
 window.addEventListener('message', event => {
   if (event.origin !== expectedOrigin || event.source !== frame.contentWindow) return;
-  if (event.data?.type !== 'conclavia.completed' || event.data.sessionId !== launched.sessionId) return;
-  // Chiedi al TUO backend di recuperare e validare il risultato.
+  if (!['conclavia.completed', 'conclavia.abandoned'].includes(event.data?.type) || event.data.sessionId !== launched.sessionId) return;
+  // Chiedi al TUO backend di verificare /status e, solo se completed, /result.
   // Non usare postMessage come prova delle risposte o autorizzazione a salvarle.
 });`;
   async function copy(value: string, label: string) {
@@ -71,7 +75,7 @@ window.addEventListener('message', event => {
     catch { setCopied('Copia non disponibile: seleziona il testo manualmente.'); }
   }
   function download() {
-    const content = `# Integrazione Conclavia · ${site.name}\n\nConfigurazione di lavoro: salva le modifiche nello Studio prima di usarla.\n\nSito: ${site._id}\nOrigine Conclavia: ${origin}\nModalità: ${integration.mode}\nRitorno: ${integration.returnUrl || 'DA CONFIGURARE'}\nOrigini autorizzate: ${site.allowedOrigins.join(', ')}\n\n## Backend\n\n\`\`\`js\n${serverExample}\n\`\`\`\n\n## Browser\n\n\`\`\`js\n${browserExample}\n\`\`\`\n\n## Verifica finale\n\nAvvio dal sito con utente di test; conferma in Conclavia; recupero server del risultato; verifica proprietà della sessione, versione del percorso e schema; salvataggio idempotente nel sito. Gli esempi sono funzioni di partenza, non un adapter completo.\n`;
+    const content = `# Integrazione Conclavia · ${site.name}\n\nConfigurazione di lavoro: salva le modifiche nello Studio prima di usarla.\n\nSito: ${site._id}\nOrigine Conclavia: ${origin}\nModalità: ${integration.mode}\nRitorno: ${integration.returnUrl || 'DA CONFIGURARE'}\nAbbandono: ${integration.abandonUrl || integration.returnUrl || 'DA CONFIGURARE'}\nOrigini autorizzate: ${site.allowedOrigins.join(', ')}\n\n## Backend\n\n\`\`\`js\n${serverExample}\n\`\`\`\n\n## Browser\n\n\`\`\`js\n${browserExample}\n\`\`\`\n\n## Verifica finale\n\nAvvio dal sito con utente di test; conferma in Conclavia; recupero server del risultato; verifica proprietà della sessione, versione del percorso e schema; salvataggio idempotente nel sito. Gli esempi sono funzioni di partenza, non un adapter completo.\n`;
     const url = URL.createObjectURL(new Blob([content], { type: 'text/markdown;charset=utf-8' }));
     const link = document.createElement('a'); link.href = url; link.download = 'conclavia-integration.md'; link.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
@@ -90,10 +94,15 @@ window.addEventListener('message', event => {
     </fieldset>
     <label>Origini autorizzate · una per riga<textarea rows={3} value={site.allowedOrigins.join('\n')} onChange={e => onChange({ ...site, allowedOrigins: e.target.value.split('\n') })} /></label>
     {!publicOrigin && <p className="notice">Le origini attuali sono locali o da completare. Per collegare il sito pubblico aggiungi la sua origine HTTPS esatta, senza percorso, e salva.</p>}
-    <label>Pagina di ritorno<input type="url" value={integration.returnUrl} onChange={e => setIntegration({ returnUrl: e.target.value })} placeholder="https://tuo-sito.it/onboarding/ritorno" /><span className="small muted">L’indirizzo completo deve appartenere a un’origine autorizzata. Il backend lo passa all’apertura di ogni sessione.</span></label>
+    <label>Pagina di ritorno<input type="url" aria-describedby="return-url-help" value={integration.returnUrl} onChange={e => setIntegration({ returnUrl: e.target.value })} placeholder="https://tuo-sito.it/onboarding/ritorno" /></label>
+    <p id="return-url-help" className="small muted">Usata dopo la conferma. Il backend può specificare un indirizzo diverso per ogni sessione.</p>
+    <label>Pagina in caso di abbandono<input type="url" aria-describedby="abandon-url-help" value={integration.abandonUrl || ''} onChange={e => setIntegration({ abandonUrl: e.target.value })} placeholder={integration.returnUrl || 'https://tuo-sito.it/onboarding/ritorno'} /></label>
+    <p id="abandon-url-help" className="small muted">Facoltativa: se vuota si usa la pagina di ritorno. Entrambe devono appartenere alle origini autorizzate.</p>
+    <p className="small">Al ritorno il sito riceve l’identificativo della sessione e l’esito successo o abbandono. Il suo backend verifica l’esito prima di proseguire.</p>
     <div className={styles.status}><span className="eyebrow">Cosa è configurato</span><dl><div><dt>Percorsi nello Studio</dt><dd>{site.flows.length || 'Nessuno'} · il backend può anche inviarli all’avvio</dd></div><div><dt>Pagina di ritorno</dt><dd>{integration.returnUrl ? 'Inserita nella configurazione' : 'Da impostare'}</dd></div><div><dt>Verifica dal tuo sito</dt><dd>Da eseguire con un cliente di test</dd></div></dl><p className="small">Salva esplicitamente le modifiche. Queste impostazioni non installano l’adapter sul tuo sito e non attestano che il risultato sia stato salvato dal tuo servizio.</p></div>
     <div className="notice">La chiave di integrazione resta sul server del sito, nella variabile <code>CONCLAVIA_SITE_KEY</code>. Ogni cliente riceve soltanto l’accesso temporaneo alla propria sessione.</div>
     {apiKey && <label>Chiave creata · copiala ora, verrà mostrata una sola volta<input readOnly type="password" value={apiKey} onFocus={e => e.target.select()} /><button onClick={() => copy(apiKey, 'Valore')}>Copia chiave</button></label>}
+    {!creating && <div>{rotating ? <div className="notice"><p>La chiave attuale smetterà subito di funzionare. Aggiorna il backend cliente con la nuova chiave. Le sessioni già aperte mantengono la loro configurazione.</p><button disabled={busy} onClick={async () => { await onRotateKey(); setRotating(false); }}>Conferma rigenerazione</button><button disabled={busy} onClick={() => setRotating(false)}>Annulla</button></div> : <button disabled={busy} onClick={() => setRotating(true)}>Rigenera chiave API</button>}</div>}
     <details className={styles.example}><summary>Per chi integra · esempi e verifica</summary><p>Funzioni di partenza per il tuo adapter. Autenticazione, associazione cliente-sessione, validazione e salvataggio restano nel tuo backend.</p><h3>1. Backend del sito</h3><pre className="code">{serverExample}</pre><button onClick={() => copy(serverExample, 'Esempio backend')}>Copia esempio backend</button><h3>2. Apertura nel browser</h3><pre className="code">{browserExample}</pre><button onClick={() => copy(browserExample, 'Esempio browser')}>Copia esempio browser</button><h3>3. Verifica completa</h3><p>Avvia dal sito con un utente di test, completa e conferma, poi verifica il recupero e il salvataggio idempotente del risultato. Un’anteprima nello Studio controlla il percorso, non il collegamento del tuo backend.</p><button onClick={download}>Scarica guida di integrazione</button></details>
     <span role="status" className="small">{copied}</span>
   </div>;
