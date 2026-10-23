@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { Answer, Answers, Field, Flow, Interpretation, Message, Session, SessionView } from './types';
 import { activeQuestions, conditionMet, InputError, validateAnswer } from './validation';
+import { terminal } from './outcome';
 
 export const copy = (locale: 'it' | 'en') => locale === 'it' ? {
   review: 'Abbiamo raccolto le risposte. Controlla il riepilogo: puoi correggerle prima di confermare.',
@@ -38,7 +39,7 @@ export function message(role: Message['role'], text: string): Message {
   return { id: randomUUID(), role, text: text.slice(0, 4000), at: new Date().toISOString() };
 }
 export function setAnswer(session: Session, questionId: string, value: unknown, skip = false): Session {
-  if (session.status === 'completed') throw new InputError('Sessione già confermata', 409);
+  if (terminal(session.status)) throw new InputError(session.status === 'completed' ? 'Sessione già confermata' : 'Sessione abbandonata', 409);
   const question = activeQuestions(session.flow, session.answers).find(q => q.id === questionId);
   if (!question) throw new InputError('Domanda non disponibile');
   if (skip && question.required) throw new InputError('La domanda è obbligatoria');
@@ -66,7 +67,7 @@ function spokenValue(field: Field, value: Answer, locale: 'it' | 'en'): string {
   return field.options?.find(o => o.id === value)?.label ?? value;
 }
 export function confirmAnswer(session: Session, accept: boolean): Session {
-  if (session.status === 'completed') throw new InputError('Sessione già confermata', 409);
+  if (terminal(session.status)) throw new InputError(session.status === 'completed' ? 'Sessione già confermata' : 'Sessione abbandonata', 409);
   const pending = session.pendingAnswer;
   if (!pending) throw new InputError('Nessuna risposta da confermare', 409);
   if (accept) {
@@ -124,6 +125,7 @@ export function applyInterpretation(session: Session, spoken: string, result: In
 }
 export function confirm(session: Session): Session {
   if (session.status === 'completed') return session;
+  if (session.status === 'abandoned') throw new InputError('Sessione abbandonata', 409);
   if (!session.consentAt) throw new InputError('Conferma prima la modalità di trattamento');
   if (session.pendingAnswer) throw new InputError('Conferma o correggi prima la risposta in sospeso');
   const errors = completionErrors(session.flow, session.answers);
@@ -131,9 +133,14 @@ export function confirm(session: Session): Session {
   if (nextQuestion(session.flow, session.answers, session.skipped)) throw new InputError('Completa o salta le domande rimanenti');
   return { ...session, status: 'completed', confirmedAt: new Date().toISOString() };
 }
+export function abandon(session: Session): Session {
+  if (session.status === 'completed') throw new InputError('Sessione già confermata', 409);
+  if (session.status === 'abandoned') return session;
+  return { ...session, status: 'abandoned', abandonedAt: new Date().toISOString(), pendingAnswer: null };
+}
 export function publicSession(session: Session): SessionView {
   return { id: session._id, siteName: session.siteName, flow: session.flow, avatar: session.avatar,
-    returnUrl: session.returnUrl, answers: session.answers, skipped: session.skipped,
+    returnUrl: session.returnUrl, abandonUrl: session.abandonUrl, answers: session.answers, skipped: session.skipped,
     messages: session.messages, status: session.status, revision: session.revision, pendingAnswer: session.pendingAnswer ?? null,
-    consentAt: session.consentAt, confirmedAt: session.confirmedAt, expiresAt: session.tokenExpiresAt.toISOString() };
+    consentAt: session.consentAt, confirmedAt: session.confirmedAt, abandonedAt: session.abandonedAt, expiresAt: session.tokenExpiresAt.toISOString() };
 }

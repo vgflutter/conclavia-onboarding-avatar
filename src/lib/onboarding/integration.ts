@@ -8,6 +8,8 @@ export function validateIntegration(value: unknown, origins: string[]): NonNulla
     throw new InputError('Modalità di integrazione non valida');
   const returnUrl = text(value.returnUrl, 'pagina di ritorno', 2000, true);
   try {
-    return { mode: value.mode as 'redirect' | 'iframe', returnUrl: returnUrl ? allowedReturnUrl(returnUrl, origins) : '' };
+    const abandonUrl = text(value.abandonUrl ?? '', 'pagina di abbandono', 2000, true);
+    return { mode: value.mode as 'redirect' | 'iframe', returnUrl: returnUrl ? allowedReturnUrl(returnUrl, origins) : '',
+      ...(abandonUrl ? { abandonUrl: allowedReturnUrl(abandonUrl, origins) } : {}) };
   } catch { throw new InputError('La pagina di ritorno deve appartenere a un’origine autorizzata, senza credenziali o frammenti'); }
 }

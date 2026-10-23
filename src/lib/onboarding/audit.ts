@@ -12,9 +12,9 @@ export type ClientAuditInput = {
   event: typeof clientAuditEvents[number]; text?: string; questionId?: string; previousQuestionId?: string; revision?: number;
   reason?: typeof clientAuditReasons[number];
 };
-type ServerAction = 'turn' | 'answer' | 'confirm-answer' | 'complete';
+type ServerAction = 'turn' | 'answer' | 'confirm-answer' | 'complete' | 'abandon';
 type AuditValue = string | number | null | AuditValue[] | { [key: string]: AuditValue };
-type AuditOutcome = 'saved' | 'awaiting_confirmation' | 'awaiting_replacement' | 'clarify' | 'out_of_scope' | 'not_applied' | 'completed' | 'replayed' | 'error' | 'reported';
+type AuditOutcome = 'saved' | 'awaiting_confirmation' | 'awaiting_replacement' | 'clarify' | 'out_of_scope' | 'not_applied' | 'completed' | 'abandoned' | 'replayed' | 'error' | 'reported';
 export type AuditEvent = {
   _id: string; siteId: string; sessionId: string; at: Date; expiresAt: Date;
   source: 'server' | 'client'; event: ServerAction | ClientAuditInput['event'];
@@ -96,7 +96,7 @@ export function buildServerAudit(session: Session, action: ServerAction, after: 
   const skippedChanged = after && JSON.stringify(session.skipped) !== JSON.stringify(after.skipped);
   const interpretation = details.interpretation;
   const outcome: AuditOutcome = details.error !== undefined ? 'error' : after?.revision === session.revision ? 'replayed' :
-    after?.status === 'completed' ? 'completed' : after?.pendingAnswer && pendingChanged ?
+    after?.status === 'completed' ? 'completed' : after?.status === 'abandoned' ? 'abandoned' : after?.pendingAnswer && pendingChanged ?
       (after.pendingAnswer.value === null ? 'awaiting_replacement' : 'awaiting_confirmation') :
     changedAnswers.length || skippedChanged ? 'saved' : interpretation?.action === 'clarify' ? 'clarify' :
     interpretation?.action === 'out_of_scope' ? 'out_of_scope' : 'not_applied';

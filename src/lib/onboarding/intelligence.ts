@@ -24,11 +24,21 @@ Keep clarifications short: at most two short sentences, with only one question. 
 For an answer to any non-record field, put the answer directly in value with its native JSON type: text, date, month and single_select use a string; number uses a JSON number; multi_select uses an array of option ID strings. Single and multi selections must use exact allowed option IDs, never labels. Do not JSON-encode or stringify value. For a records field only, set value=null and encode its complete structured array in valueJson. For all other answers set valueJson=null. For clarify, out_of_scope, skip, confirm_answer and reject_answer, set both value and valueJson to null. A correction follows the type of the questionId being corrected, even when it differs from the current question. Never infer an uncertain amount or perform currency conversion.
 explanation is a brief clarification, otherwise empty. No external tools or actions are available.`;
 }
-export async function interpret(session: Session, utterance: string): Promise<Interpretation> {
+export async function interpret(session: Session, utterance: string, inputMode: 'voice' | 'text' = 'text'): Promise<Interpretation> {
   if (process.env.ONBOARDING_AI_ENABLED !== 'true' || !process.env.OPENAI_API_KEY)
     throw new InputError('Interpretazione vocale non configurata. Puoi usare le opzioni e i campi.', 503);
   const currentQuestion = (session.pendingAnswer ? session.flow.questions.find(q => q.id === session.pendingAnswer?.questionId) :
     nextQuestion(session.flow, session.answers, session.skipped)) ?? null;
+  // Isolated spoken indexes can be noise transcribed as digits. They are not
+  // evidence of an intended selection; never let the model map them to an option.
+  const voiceFragment = /^(?:\d+[.,!?…:;]*\s*)+(?:(?:sì|si|yes|ok)[.!?…]*)?$/iu.test(utterance.trim());
+  if (inputMode === 'voice' && voiceFragment &&
+    (currentQuestion?.type === 'single_select' || currentQuestion?.type === 'multi_select') &&
+    !(currentQuestion.options ?? []).some(option => option.label.trim() === utterance.trim())) {
+    return { action: 'clarify', questionId: currentQuestion.id, valueJson: null,
+      explanation: session.flow.locale === 'it' ? 'Non ho capito la tua scelta. Puoi dirla con parole tue?' :
+        'I did not understand your choice. Could you say it in your own words?' };
+  }
   // A bare integer can mean either a quantity or an option position. Refuse
   // only that ambiguity, before paying for a model call; do not guess a mapping.
   const bareInteger = /^([1-9]\d*)\.?$/.exec(utterance.trim());
@@ -48,7 +58,7 @@ export async function interpret(session: Session, utterance: string): Promise<In
     body: JSON.stringify({ model: process.env.OPENAI_ONBOARDING_MODEL || 'gpt-5.4-mini', store: false,
       instructions: conversationInstructions(session), reasoning: { effort: 'low' }, max_output_tokens: 1100,
       input: JSON.stringify({ objective: session.flow.objective, context: session.context,
-        currentQuestion,
+        currentQuestion, inputMode,
         pendingAnswer: session.pendingAnswer ?? null,
         previousQuestions: session.flow.questions.filter(q => Object.hasOwn(session.answers, q.id) || session.skipped.includes(q.id)),
         answers: session.answers, skipped: session.skipped, recentDialogue: session.messages.slice(-6), utterance }),

@@ -43,7 +43,8 @@ export function requestIsAdmin(req: Request) {
 }
 export function allowedReturnUrl(value: unknown, origins: string[]) {
   if (typeof value !== 'string' || value.length > 2000) throw new InputError('Indirizzo di ritorno non valido');
-  const url = new URL(value);
+  let url: URL;
+  try { url = new URL(value); } catch { throw new InputError('Indirizzo di ritorno non valido'); }
   if (!origins.includes(url.origin) || url.username || url.password || url.hash) throw new InputError('Indirizzo di ritorno non autorizzato');
   return url.toString();
 }

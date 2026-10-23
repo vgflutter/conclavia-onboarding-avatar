@@ -9,6 +9,7 @@ import { activeQuestions } from '@/lib/onboarding/validation';
 import { playStreamingSpeech } from '@/lib/streaming-voice-player';
 import { startTranscription, type LiveConnection } from '@/lib/live-transcription';
 import { voiceCommand, voiceContext, voiceQuestion } from '@/lib/voice-interaction';
+import { outcomeUrl, terminal } from '@/lib/onboarding/outcome';
 import styles from './SessionRoom.module.css';
 
 const rest = { viseme: 'rest' as AvatarViseme, level: 0 };
@@ -23,7 +24,6 @@ export function SessionRoom({ id }: { id: string }) {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const busyRef = useRef(false);
-  const [accepted, setAccepted] = useState(false);
   const [mode, setMode] = useState<'voice' | 'text'>('voice');
   const [edit, setEdit] = useState('');
   const [options, setOptions] = useState(false);
@@ -135,7 +135,7 @@ export function SessionRoom({ id }: { id: string }) {
   }, [id]);
 
   async function say(s: SessionView) {
-    if (!audioEnabled.current || pausedRef.current || inputSpeaking.current || s.status === 'completed') return;
+    if (!audioEnabled.current || pausedRef.current || inputSpeaking.current || terminal(s.status)) return;
     const last = s.messages.at(-1);
     if (last?.role !== 'assistant') return;
     stopSpeech();
@@ -166,10 +166,10 @@ export function SessionRoom({ id }: { id: string }) {
       if (!mounted.current) return false;
       update(updated); setEdit(''); setOptions(false);
       if (!inputSpeaking.current) { setHearing(false); updatePartial(''); }
-      if (updated.status === 'completed') {
-        audit('voice_stopped', 'session_completed');
+      if (terminal(updated.status)) {
+        audit('voice_stopped', updated.status === 'completed' ? 'session_completed' : 'user_action');
         stopMedia();
-        if (window.parent !== window) window.parent.postMessage({ type: 'conclavia.completed', sessionId: id }, new URL(updated.returnUrl).origin);
+        if (window.parent !== window) window.parent.postMessage({ type: updated.status === 'completed' ? 'conclavia.completed' : 'conclavia.abandoned', sessionId: id }, new URL(updated.returnUrl).origin);
       } else {
         // Final review is explicit: background speech must not change its answers.
         if (updated.status === 'review' && !updated.pendingAnswer) {
@@ -277,6 +277,12 @@ export function SessionRoom({ id }: { id: string }) {
     if (!next && current.current) void say(current.current);
   }
   function editAnswer(questionId: string) { switchToText(); setEdit(questionId); setError(''); }
+  async function leave() {
+    if (!current.current || busyRef.current) return;
+    stopMedia();
+    if (!terminal(current.current.status) && !await act('abandon', {})) return;
+    if (window.parent === window) window.location.assign(outcomeUrl(current.current));
+  }
 
   if (!session) return <main className={styles.room}><div className={styles.loading} role="status">{error || c.loading}</div></main>;
   const locale = session.flow.locale;
@@ -289,40 +295,44 @@ export function SessionRoom({ id }: { id: string }) {
   const pending = !edit && session.pendingAnswer?.value != null ? session.pendingAnswer : null;
   const spokenText = session.messages.at(-1)?.text ?? '';
   // The fixed question already captions that sentence. Keep only the additional speech below it.
-  const subtitle = field && spokenText.endsWith(field.title) ? spokenText.slice(0, -field.title.length).trim() : spokenText;
+  const caption = spokenText.startsWith(session.flow.introduction) ? spokenText.slice(session.flow.introduction.length).trim() : spokenText;
+  const subtitle = field && caption.endsWith(field.title) ? caption.slice(0, -field.title.length).trim() : caption;
   const status = reviewing ? c.reviewing : paused ? c.paused : busy ? c.thinking : connecting || preparing ? c.preparing :
     speaking ? c.speaking : hearing ? c.hearing : live ? c.listening : c.ready;
-  const returnToSite = new URL(session.returnUrl); returnToSite.searchParams.set('onboardingSession', id);
+  const returnToSite = outcomeUrl(session);
   const avatar = <BusinessAvatar language={locale} appearance={session.avatar.appearance} visualStyle={session.avatar.visualStyle} mood="friendly"
     viseme={frame.viseme} voiceLevel={frame.level} ariaLabel={session.avatar.name} />;
 
   return <main className={styles.room} lang={locale}>
-    <header className={styles.header}><a className={styles.brand} href={session.returnUrl} onClick={stopMedia}><span />{session.siteName}</a>
-      <span>{session.flow.title}</span><a className={styles.exit} href={session.returnUrl} onClick={stopMedia}>{c.return} ↗</a></header>
-    {!session.consentAt ? <section className={styles.welcome}>
+    <header className={styles.header}><span className={styles.brand}><span />{session.siteName}</span>
+      <span className={styles.flowTitle}>{session.flow.title}</span>{terminal(session.status) ? <a className={styles.exit} href={returnToSite} target="_top">{c.return} ↗</a> : <button className={styles.exit} disabled={busy} onClick={leave}>{c.abandon} ↗</button>}</header>
+    {session.status === 'abandoned' ? <section className={styles.welcome}>
+      <h1>{c.abandoned}</h1><p>{c.abandonedHint}</p><a className={styles.primary} href={returnToSite} target="_top">{c.return} →</a>
+    </section> : !session.consentAt ? <section className={styles.welcome}>
       <div className={styles.welcomeAvatar}>{avatar}</div>
       <div className={styles.eyebrow}>{session.avatar.name} · {c.virtual}</div>
       <h1>{c.welcome}</h1><p className={styles.lead}>{c.intro}</p><p>{c.introDetail}</p>
-      <details className={styles.privacy}><summary>{c.privacyTitle}</summary><p>{c.privacy}</p></details>
-      <label className={styles.consent}><input type="checkbox" checked={accepted} onChange={e => setAccepted(e.target.checked)} /><span>{c.consent}</span></label>
       {error && <p role="alert" className={styles.error}>{error}</p>}
-      <div className={styles.actions}><button className={styles.primary} disabled={!accepted || busy} onClick={() => begin(true)}><Microphone />{c.begin}</button>
-        <button className={styles.linkButton} disabled={!accepted || busy} onClick={() => begin(false)}>{c.beginText} →</button></div>
+      <div className={styles.actions}><button className={styles.primary} disabled={busy} onClick={() => begin(true)}><Microphone />{c.begin}</button>
+        <button className={styles.linkButton} disabled={busy} onClick={() => begin(false)}>{c.beginText} →</button></div>
+      <p className={styles.privacy}>{c.privacy}</p>
     </section> : session.status === 'completed' ? <section className={styles.welcome}>
       <div className={styles.doneIcon}>✓</div><div className={styles.eyebrow}>{c.finish}</div><h1>{c.finished}</h1>
-      <p>{c.finishedHint}</p><a className={styles.primary} href={returnToSite.toString()} target="_top">{c.continue} {session.siteName} →</a>
-    </section> : <div className={styles.content}>
+      <p>{c.finishedHint}</p><a className={styles.primary} href={returnToSite} target="_top">{c.continue} {session.siteName} →</a>
+    </section> : <div className={styles.content} data-voice-dock={!reviewing && !heldTranscript && mode === 'voice'}>
       <div className={styles.progressRow}><span>{reviewing ? c.reviewing : c.step + ' ' + (questions.indexOf(field!) + 1) + ' ' + c.of + ' ' + questions.length}</span>
         <span>{answered} / {questions.length}</span></div>
       <div className={styles.progress} role="progressbar" aria-label={c.progress} aria-valuenow={answered} aria-valuemin={0} aria-valuemax={questions.length}>
         <span style={{ width: answered / questions.length * 100 + '%' }} /></div>
       <section className={styles.stage} data-mode={mode} data-expanded={mode === 'voice' && (options || Boolean(edit))} data-reviewing={reviewing}>
+        <div className={styles.assistant}>
         <div className={styles.avatar}>{avatar}</div>
         <div className={styles.status} role="status" data-active={live && !paused && !reviewing}>
           <span className={styles.wave} data-animated={speaking || hearing}><i /><i /><i /><i /><i /></span>{status}</div>
+        </div>
         <h1 className={styles.question}>{field?.title ?? c.reviewTitle}</h1>
         {mode === 'text' && field?.description && <p className={styles.description}>{field.description}</p>}
-        {mode === 'voice' && <div className={styles.subtitles} aria-live="polite" aria-atomic="true">
+        {mode === 'voice' && <div className={styles.subtitles} data-user={Boolean(partial)} aria-live="polite" aria-atomic="true">
           {partial ? <p><span>{c.understood}</span>{partial}</p> : <p>{busy ? c.thinking : subtitle}</p>}
         </div>}
         {error && <p role="alert" className={styles.error}>{error}</p>}
