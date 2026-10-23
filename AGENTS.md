@@ -20,5 +20,6 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 # Shared avatar ownership
 
+- Structure reusable capabilities as owned features with documented public APIs and tests. Avatar, performance and speech implementations live in the kit's `src/features` and are consumed through its feature entry points; preserve legacy re-exports during migration. Other shared application capabilities need an appropriate owning module/package rather than copies or business logic inside the avatar kit.
 - Renderer, animation, asset, voice-catalog and playback implementations belong to `../conclavia-avatar-kit`, used by both Conclavia applications. Preserve the consumer compatibility re-exports; do not introduce local copies.
 - After shared changes, run `npm run check:avatar-kit` with both consumers installed, then the relevant avatar/player regressions and both consumer builds. Keep the three Git checkouts side by side and publish kit changes before dependent consumer changes.
