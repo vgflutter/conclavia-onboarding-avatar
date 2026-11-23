@@ -1,6 +1,6 @@
 # Voce e layout Onboarding — 23 novembre 2026
 
-Stato finale: correzione della gestione audio e nuovo layout pubblicati, commit applicativo `180caeb`, release `20261123172257900-6344de`. Il blocco del credito Inworld resta distinto dal rilascio.
+Stato finale: correzione della gestione audio e layout ampio anche durante la scrittura pubblicati, commit applicativo `e68e6e6`, release `20261123180752245-7f1530`. Il blocco del credito Inworld resta distinto dal rilascio.
 
 ## Diagnosi
 
@@ -38,7 +38,7 @@ Otto verifiche visive superate con sessioni e audio sintetici, senza overflow or
 La suite vocale di 15 casi è passata sull’immagine Linux. Dopo la rifinitura finale delle opzioni mobile sono passati anche i due flussi di selezione/ripresa e i due controlli visivi dei telefoni sull’immagine definitiva. Lint, TypeScript e 82 test unitari superati. La guardia, ricontrollata dopo la conclusione del percorso, ha rilevato zero conversazioni attive e ha permesso il rilascio. La ricarica Inworld rimane un intervento distinto dal layout.
 
 
-## Rilascio finale verificato
+## Primo rilascio verificato
 
 | Dato | Valore |
 | --- | --- |
@@ -68,4 +68,18 @@ Il layout condiviso ora si applica a tutti i passaggi in corso, sia a voce sia s
 
 Il caso di regressione della riproduzione fallita controlla anche che l’avatar desktop mantenga la dimensione e resti accanto al questionario. Collaudi visivi con quattro opzioni e descrizione, in italiano/inglese, su desktop 1304×728 (caso dello screenshot), 1440×900, 1280×720 e telefoni 390×844/375×667, più avvio scritto manuale e ripresa. Screenshot e artefatti in `/private/tmp/onboarding-text-layout-20261123/`.
 
-Immagine candidata con lo stesso kit di produzione: `conclavia-onboarding:text-layout-20261123`, digest `sha256:d54e725666a643c679c574b98d97cad38fdbf2ea7b7358f9939d3f848076a0ef`. Build, 82 unit test, lint e TypeScript passati; sull’immagine definitiva passano tutte le 15 regressioni vocali (compresa la dimensione dell’avatar dopo il guasto) e i sette scenari visivi/scritti. Rilascio in preparazione dopo la conferma dell’utente di aver interrotto il nuovo percorso. Il credito Inworld e i dati dei questionari rimangono invariati.
+Immagine candidata con lo stesso kit di produzione: `conclavia-onboarding:text-layout-20261123`, digest `sha256:d54e725666a643c679c574b98d97cad38fdbf2ea7b7358f9939d3f848076a0ef`. Build, 82 unit test, lint e TypeScript passati; sull’immagine definitiva passano tutte le 15 regressioni vocali (compresa la dimensione dell’avatar dopo il guasto) e i sette scenari visivi/scritti. Rilascio completato dopo la conferma dell’utente di aver interrotto il nuovo percorso e il superamento delle guardie remote. Il credito Inworld e i dati dei questionari rimangono invariati.
+
+
+### Rilascio della correzione del layout scritto
+
+- Commit applicativo attivo: `e68e6e607431cf43e5764b21624534b61e9d4614`.
+- Release: `20261123180752245-7f1530`; immagine Onboarding `sha256:d54e725666a643c679c574b98d97cad38fdbf2ea7b7358f9939d3f848076a0ef`.
+- Release precedente conservata: `20261123172257900-6344de`; ripristino automatico del solo Onboarding predisposto con lo stesso helper del primo rilascio.
+- WorkingDirectory riconfermata prima dell’attivazione: `/app/conclavia-onboarding-avatar`. Checksum dell’archivio trasportato: `d567f2c84171c5a89b9a4581e1ded07adf87abf7374cd0a58b60f499d4b2e511`.
+
+Onboarding healthy, health HTTPS e protezioni delle API gestionali verificati. ID, immagine e avvio di Meeting, gateway e sito invariati; hash degli ambienti preservati. Nessuna modifica a Unmatt, Daily, provider o dati dei questionari. Lo stesso kit avatar rimane incorporato nell’immagine.
+
+Verifica Chrome sulla produzione superata per tre scenari: dimensioni della schermata dell’utente con audio fallito e quattro opzioni, telefono 390×844 con audio fallito, avvio scritto manuale desktop. Nessun overflow orizzontale o errore JavaScript; scelta «Stabile», conferma e avanzamento verificati su sessioni simulate. Avatar misurato a 495 px nel viewport 1304×728, 280 px su telefono e 580 px nel percorso scritto manuale 1440×900. Nessuna chiamata ai provider o scrittura di dati reali nel collaudo.
+
+Ricevuta remota: `/opt/conclavia/releases/20261123180752245-7f1530/onboarding-only-receipt.json`. Artefatti locali, manifesti, helper e screenshot verificati: `/private/tmp/onboarding-text-layout-20261123/`. La presenza delle chiavi/flag è riconfermata dal tool vocale; la verifica del layout non attesta il ripristino del credito o dell’audio Inworld.
