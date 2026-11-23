@@ -268,6 +268,7 @@ export function SessionRoom({ id }: { id: string }) {
     }
     const ok = await act('consent', { accept: true });
     if (!ok) { stopMedia(); return; }
+    window.scrollTo(0, 0);
     if (voice) await startAudio(); else switchToText();
   }
   function togglePause() {
@@ -323,7 +324,7 @@ export function SessionRoom({ id }: { id: string }) {
     </section> : session.status === 'completed' ? <section className={styles.welcome}>
       <div className={styles.doneIcon}>✓</div><div className={styles.eyebrow}>{c.finish}</div><h1>{c.finished}</h1>
       <p>{c.finishedHint}</p><a className={styles.primary} href={returnToSite} target="_top">{c.continue} {session.siteName} →</a>
-    </section> : <div className={styles.content} data-voice-dock={!reviewing && !heldTranscript && mode === 'voice'}>
+    </section> : <div className={styles.content} data-voice-layout={!reviewing && mode === 'voice'} data-voice-dock={!reviewing && !heldTranscript && mode === 'voice' && !options && !edit}>
       <div className={styles.progressRow}><span>{reviewing ? c.reviewing : c.step + ' ' + (questions.indexOf(field!) + 1) + ' ' + c.of + ' ' + questions.length}</span>
         <span>{answered} / {questions.length}</span></div>
       <div className={styles.progress} role="progressbar" aria-label={c.progress} aria-valuenow={answered} aria-valuemin={0} aria-valuemax={questions.length}>
@@ -334,6 +335,7 @@ export function SessionRoom({ id }: { id: string }) {
         <div className={styles.status} role="status" data-active={live && !paused && !reviewing}>
           <span className={styles.wave} data-animated={speaking || hearing}><i /><i /><i /><i /><i /></span>{status}</div>
         </div>
+        <div className={styles.conversation}>
         <h1 className={styles.question}>{field?.title ?? c.reviewTitle}</h1>
         {mode === 'text' && field?.description && <p className={styles.description}>{field.description}</p>}
         {mode === 'voice' && <div className={styles.subtitles} data-user={Boolean(partial)} aria-live="polite" aria-atomic="true">
@@ -387,6 +389,7 @@ export function SessionRoom({ id }: { id: string }) {
           <button className={styles.linkButton} disabled={busy} onClick={startAudio}><Microphone />{c.voice}</button>
         </div>}
         {reviewing && <p>{c.reviewHint}</p>}
+        </div>
       </section>
       {recent && !reviewing && !edit && <div className={styles.saved}><span><small>✓ {c.saved}</small>{answerLabel(recent, session.answers[recent.id], locale)}</span>
         <button className={styles.linkButton} disabled={busy} onClick={() => editAnswer(recent.id)}>{c.edit}</button></div>}

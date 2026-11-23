@@ -17,6 +17,8 @@
 .brand { display: flex; align-items: center; gap: 10px; font-size: 22px; font-weight: 750; color: var(--ink); text-decoration: none; letter-spacing: -.7px; }
 .brand span { width: 10px; height: 10px; border-radius: 50%; background: #00ca91; box-shadow: 0 0 18px #00ca9166; }
 .exit { text-decoration: none; border: 0; background: transparent; color: inherit; font: inherit; cursor: pointer; }
+.room .exit { background: transparent; border-color: transparent; padding: 8px 0; }
+.room .exit:hover { background: #ffffff08; border-color: transparent; }
 .exit:disabled { opacity: .5; cursor: wait; }
 .welcome { max-width: 680px; margin: 0 auto; padding: 24px 0 40px; text-align: center; }
 .welcome h1 { font-size: clamp(34px, 5vw, 50px); margin: 14px 0; letter-spacing: -.04em; }
@@ -95,8 +97,8 @@
 .room .error { color: #ffc3bc; background: #412320; border: 1px solid #79423b; border-radius: 12px; padding: 14px 18px; font-size: 14px; margin: 20px 0; text-align: left; }
 .doneIcon { margin: 70px auto 22px; border-radius: 50%; width: 60px; height: 60px; background: #124d39; color: #2cdda3; display: grid; place-items: center; font-size: 30px; }
 .loading { text-align: center; padding: 30vh 20px; }
-/* A compact conversation surface on both phones and larger screens. */
-.header { max-width: 480px; min-height: 64px; gap: 12px; }
+/* Written answers stay readable; the voice stage uses the available screen. */
+.header { max-width: 1180px; min-height: 64px; gap: 12px; }
 .brand { font-size: 17px; }
 .flowTitle { display: none; }
 .exit { font-size: 12px; max-width: 160px; text-align: right; }
@@ -107,8 +109,10 @@
 .welcome > p { font-size: 14px; }
 .welcome .actions { flex-direction: column; gap: 8px; margin-top: 24px; }
 .welcome .primary { width: 100%; }
-.content { max-width: 480px; padding: 20px 0 24px; }
-.content[data-voice-dock="true"] { padding-bottom: calc(190px + env(safe-area-inset-bottom)); }
+.content { max-width: 760px; padding: 20px 0 24px; }
+.content[data-voice-layout="true"] { max-width: 1180px; }
+.conversation { min-width: 0; }
+.content[data-voice-dock="true"] { padding-bottom: calc(150px + env(safe-area-inset-bottom)); }
 .stage { text-align: left; padding: 24px 0 16px; }
 .assistant { display: flex; align-items: center; gap: 16px; margin-bottom: 24px; }
 .avatar, .stage[data-expanded="true"] .avatar,
@@ -123,16 +127,16 @@
 .subtitles[data-user="true"] { padding: 14px 16px; border-radius: 18px 18px 4px 18px; background: #173d34; }
 .voiceControls {
   position: fixed; z-index: 5; bottom: 0; left: 50%; transform: translateX(-50%);
-  width: min(480px, calc(100% - 32px)); box-sizing: border-box;
-  margin: 0; padding: 14px 12px calc(12px + env(safe-area-inset-bottom));
+  width: min(680px, calc(100% - 32px)); box-sizing: border-box;
+  margin: 0; padding: 10px 12px calc(8px + env(safe-area-inset-bottom));
   background: #111820f5; border: 1px solid #293b3b; border-bottom: 0;
   border-radius: 24px 24px 0 0; backdrop-filter: blur(16px); text-align: center;
 }
-.voiceControls p { font-size: 12px; line-height: 1.45; margin: 0 0 12px; }
+.voiceControls p { font-size: 12px; line-height: 1.4; margin: 0 0 8px; }
 .voiceControls .actions { gap: 8px; flex-wrap: nowrap; }
-.voiceControls .actions > button { min-height: 48px; padding: 12px 16px; font-size: 13px; }
+.voiceControls .actions > button { min-height: 44px; padding: 10px 16px; font-size: 13px; }
 .voiceControls .pause { display: inline-flex; align-items: center; justify-content: center; gap: 8px; background: #00ca91; color: #05251d; border-color: #00ca91; }
-.voiceControls > button { margin-top: 6px; padding: 8px 12px; min-height: 44px; font-size: 12px; }
+.voiceControls > button { margin-top: 2px; padding: 6px 12px; min-height: 36px; font-size: 12px; }
 .stage[data-mode="voice"] .fields { padding: 16px; border: 1px solid var(--line); border-radius: 20px; background: #141c25; max-height: 42dvh; overflow-y: auto; }
 .fields :global(.answer-options) { grid-template-columns: minmax(0, 1fr); }
 .fields :global(.answer-options) > button { min-height: 48px; }
@@ -157,26 +161,66 @@
   .welcome h1 { font-size: 30px; }
   .voiceControls .actions > button { padding: 12px; }
 }
-/* Voice mode feels like a call: the avatar is the main presence. */
+/* The avatar leads the call; question and actions form a compact companion panel. */
 .stage[data-mode="voice"]:not([data-reviewing="true"]) { text-align: center; }
 .stage[data-mode="voice"]:not([data-reviewing="true"]) .assistant {
-  flex-direction: column; gap: 14px; margin-bottom: 20px;
+  flex-direction: column; gap: 10px; margin-bottom: 14px;
 }
 .stage[data-mode="voice"]:not([data-reviewing="true"]) .avatar {
-  width: min(360px, 78vw, 38dvh); height: min(360px, 78vw, 38dvh);
-  box-shadow: 0 0 80px #00ca9115;
+  width: min(440px, 90vw, 44dvh); height: min(440px, 90vw, 44dvh);
+  box-shadow: 0 0 100px #00ca9115;
 }
 .stage[data-mode="voice"]:not([data-reviewing="true"]) .status { justify-content: center; }
 .stage[data-mode="voice"]:not([data-reviewing="true"]) .question {
-  max-width: 420px; font-size: 20px; font-weight: 500; line-height: 1.4; margin: 0 auto 14px;
+  max-width: 600px; font-size: clamp(18px, 2.4vw, 22px); font-weight: 600; line-height: 1.35; margin: 0 auto 10px;
 }
-.stage[data-mode="voice"]:not([data-reviewing="true"]) .subtitles { font-size: 14px; }
-.welcomeAvatar { width: min(280px, 72vw, 34dvh); height: min(280px, 72vw, 34dvh); }
-@media (max-height: 700px) {
-  .stage[data-mode="voice"]:not([data-reviewing="true"]) .avatar {
+.stage[data-mode="voice"]:not([data-reviewing="true"]) .subtitles { max-width: 600px; font-size: 13px; line-height: 1.5; }
+.stage[data-mode="voice"]:not([data-reviewing="true"]) .error { padding: 10px 14px; font-size: 13px; margin: 12px 0; }
+.welcomeAvatar { width: min(320px, 80vw, 38dvh); height: min(320px, 80vw, 38dvh); }
+@media (max-width: 959px) {
+  .stage[data-mode="voice"][data-expanded="true"]:not([data-reviewing="true"]) .avatar {
     width: min(260px, 70vw, 30dvh); height: min(260px, 70vw, 30dvh);
   }
-  .stage[data-mode="voice"]:not([data-reviewing="true"]) .assistant { gap: 10px; margin-bottom: 14px; }
+  .stage[data-expanded="true"] .voiceControls {
+    position: static; transform: none; width: 100%; margin-top: 16px;
+    border-bottom: 1px solid #293b3b; border-radius: 16px;
+  }
+}
+@media (max-width: 959px) and (max-height: 740px) {
+  .stage[data-mode="voice"]:not([data-reviewing="true"]) .avatar {
+    width: min(380px, 86vw, max(120px, calc(100dvh - 410px))); height: min(380px, 86vw, max(120px, calc(100dvh - 410px)));
+  }
+  .stage[data-mode="voice"]:not([data-reviewing="true"]) .assistant { gap: 6px; margin-bottom: 10px; }
+}
+@media (min-width: 960px), (min-width: 700px) and (max-height: 540px) {
+  .content[data-voice-dock="true"] { padding-bottom: 24px; }
+  .stage[data-mode="voice"]:not([data-reviewing="true"]) {
+    display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(300px, .85fr);
+    align-items: center; gap: clamp(28px, 4vw, 64px); min-height: calc(100dvh - 200px); padding: 28px 0;
+    text-align: left;
+  }
+  .stage[data-mode="voice"]:not([data-reviewing="true"]) .assistant { min-width: 0; margin: 0; gap: 14px; }
+  .stage[data-mode="voice"]:not([data-reviewing="true"]) .avatar {
+    width: min(580px, 48vw, 68dvh); height: min(580px, 48vw, 68dvh);
+  }
+  .stage[data-mode="voice"]:not([data-reviewing="true"]) .question { font-size: 22px; margin: 0 0 12px; }
+  .stage[data-mode="voice"]:not([data-reviewing="true"]) .subtitles { margin: 0; font-size: 14px; }
+  .voiceControls {
+    position: static; transform: none; width: 100%; margin-top: 24px; padding: 0;
+    background: none; border: 0; border-radius: 0; backdrop-filter: none; text-align: left;
+  }
+  .voiceControls .actions { justify-content: flex-start; flex-wrap: wrap; }
+  .voiceControls > button { margin: 6px 0 0 -12px; }
+  .stage[data-mode="voice"] .fields { max-height: 45dvh; }
+  .content[data-voice-layout="true"] > .transcript,
+  .content[data-voice-layout="true"] > .footer { max-width: 420px; margin-left: auto; }
+}
+@media (min-width: 700px) and (max-height: 540px) {
+  .stage[data-mode="voice"]:not([data-reviewing="true"]) { padding: 12px 0; gap: 24px; }
+  .stage[data-mode="voice"]:not([data-reviewing="true"]) .avatar {
+    width: min(360px, 36vw, max(120px, calc(100dvh - 170px))); height: min(360px, 36vw, max(120px, calc(100dvh - 170px)));
+  }
+  .voiceControls { margin-top: 14px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .wave[data-animated="true"] i { animation: none; }
