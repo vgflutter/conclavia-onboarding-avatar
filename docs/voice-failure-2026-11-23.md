@@ -1,4 +1,6 @@
-# Guasto della voce Onboarding — 23 novembre 2026
+# Voce e layout Onboarding — 23 novembre 2026
+
+Stato finale: correzione della gestione audio e nuovo layout pubblicati, commit applicativo `180caeb`, release `20261123172257900-6344de`. Il blocco del credito Inworld resta distinto dal rilascio.
 
 ## Diagnosi
 
@@ -22,7 +24,7 @@ La correzione non ripristina credito Inworld. Dopo la ricarica serve un nuovo co
 
 Prima della build confrontati gli hash dei sorgenti con l’immagine originale di produzione: il codice runtime `HEAD` coincide; differisce soltanto il file generato `next-env.d.ts`. La build candidata usa lo snapshot del kit `163be621502a9ed20edb1134bec3a11c3f82a95b` dell’immagine Onboarding attiva, con hash verificati sul manifesto. Le modifiche estranee già presenti nel kit, nel deployer e in `tsconfig.json` rimangono escluse.
 
-Al controllo iniziale c’è una conversazione attiva. Nessun riavvio o abbandono forzato: il runbook richiede di attendere conclusione/scadenza prima dell’attivazione. Versione effettivamente attiva: release Conclavia `20261111183115722-40a8e0`, immagine Onboarding `sha256:6b2b4ad270c164e1fa6a27412657e77bd2fd0febba35250249031d045e72c145` (costruita nella release `20261006230501292-eb15ad`). Immagine candidata verificata: `conclavia-onboarding:voice-fix-20261123`, digest Linux `sha256:3f04563d5fa379238d7f6f772e75fd65a229b53b309f9ba98689679f4faa77f5`. Sorgenti isolati e configurazione del collaudo immagine in `/private/tmp/onboarding-voice-fix-20261123/`; il container di collaudo è stato fermato. La correzione non è ancora online: la build pronta non è una release attivata. Unmatt e Meeting non sono stati riavviati né modificati.
+Al controllo iniziale c’è una conversazione attiva. Nessun riavvio o abbandono forzato: il runbook richiede di attendere conclusione/scadenza prima dell’attivazione. Versione attiva all’inizio dell’intervento: release Conclavia `20261111183115722-40a8e0`, immagine Onboarding `sha256:6b2b4ad270c164e1fa6a27412657e77bd2fd0febba35250249031d045e72c145` (costruita nella release `20261006230501292-eb15ad`). Immagine candidata verificata: `conclavia-onboarding:voice-fix-20261123`, digest Linux `sha256:3f04563d5fa379238d7f6f772e75fd65a229b53b309f9ba98689679f4faa77f5`. Sorgenti isolati e configurazione del collaudo immagine in `/private/tmp/onboarding-voice-fix-20261123/`; il container di collaudo è stato fermato. In quella fase la correzione era pronta e non ancora online. Il limite della conversazione attiva è stato superato dopo la sua conclusione, come registrato nel rilascio finale. Unmatt e Meeting non sono stati riavviati né modificati.
 
 
 ## Layout richiesto dopo la diagnosi
@@ -33,4 +35,26 @@ Su mobile/tablet il percorso resta verticale, con avatar più grande e dock infe
 
 Otto verifiche visive superate con sessioni e audio sintetici, senza overflow orizzontale o errori JavaScript: desktop 1440×900 e 1750×1000, laptop 1280×720, tablet 834×1112, telefoni 390×844 e 375×667, orizzontale 844×390 e viewport ridotto 720×450. Screenshot in `/private/tmp/onboarding-layout-20261123/`. La build Linux con il kit di produzione è pronta: immagine `conclavia-onboarding:voice-layout-20261123`, digest `sha256:edd6c57fa55777760a825fd9ca52ca0bb7581ca04a7f4617b21edaef1149957f`; include anche la correzione della riproduzione vocale. Questa candidata sostituisce quella della sola voce per il prossimo rilascio.
 
-La suite vocale di 15 casi è passata sull’immagine Linux. Dopo la rifinitura finale delle opzioni mobile sono passati anche i due flussi di selezione/ripresa e i due controlli visivi dei telefoni sull’immagine definitiva. Lint, TypeScript e 82 test unitari superati. La guardia, ricontrollata dopo la conclusione del percorso, rileva zero conversazioni attive: attivazione in preparazione. La ricarica Inworld rimane un intervento distinto dal layout. Esito e versione attiva vengono registrati dopo il rilascio.
+La suite vocale di 15 casi è passata sull’immagine Linux. Dopo la rifinitura finale delle opzioni mobile sono passati anche i due flussi di selezione/ripresa e i due controlli visivi dei telefoni sull’immagine definitiva. Lint, TypeScript e 82 test unitari superati. La guardia, ricontrollata dopo la conclusione del percorso, ha rilevato zero conversazioni attive e ha permesso il rilascio. La ricarica Inworld rimane un intervento distinto dal layout.
+
+
+## Rilascio finale verificato
+
+| Dato | Valore |
+| --- | --- |
+| Commit applicativo attivo | `180caeb2ef7a1ce817f3fc3adbdaee4a00afd647` (include il fix vocale `64cf566`) |
+| Release | `20261123172257900-6344de` |
+| Immagine Onboarding | `sha256:edd6c57fa55777760a825fd9ca52ca0bb7581ca04a7f4617b21edaef1149957f` |
+| WorkingDirectory | `/app/conclavia-onboarding-avatar` (verificata prima dell’attivazione) |
+| Release precedente conservata | `20261111183115722-40a8e0` |
+| Archivio trasportato SHA-256 | `77b565ea5793270bc019ac3a85e4e9da805b3bf4dc6fcc0fd2bbd7263db4e840` |
+
+Rilascio limitato al solo Onboarding, adattando l’helper già usato per gli aggiornamenti del solo Meeting e riusando `remote.py`: verifica checksum/immagine, entrambi i lock (canonico e legacy), guardie Mongo in sola lettura, controllo Compose/Caddy, health HTTPS e ripristino automatico del solo servizio precedente in caso di errore. Gli ambienti sono stati copiati dalla release attiva sul VPS e confrontati per hash; nessun env di sviluppo o credenziale è stato trasferito dal Mac.
+
+Meeting, gateway e sito conservano ID, immagine e istante di avvio originali. Anche gli hash degli ambienti sono invariati. Unmatt, Daily e pubblicazioni non sono stati modificati o riavviati. Il precedente rilascio rimane disponibile per il ripristino.
+
+Controlli del deployer: 69 Node, 66 Python e test Caddy nativo superati. Dopo l’attivazione: container Onboarding healthy; entrambi gli health HTTPS positivi; API gestionali anonime `401` con Basic auth. `onboarding-voice status` riconferma release/immagine nuove e flag/chiavi presenti, senza verificarne il credito.
+
+Chrome sul dominio reale `https://onboarding.conclavia.me`: desktop 1440×900 e mobile 390×844 superati, incluse apertura delle opzioni, domanda e comandi visibili, nessun overflow orizzontale o errore JavaScript. Avatar misurato a 580 px su desktop e 351 px su mobile. Le API di sessione e l’audio sono simulati nel browser: nessuna sessione cliente creata, nessuna chiamata ai provider. Il credito Inworld non è stato ricaricato e la voce reale non è certificata da questi controlli.
+
+Bundle e ricevuta sul VPS: `/opt/conclavia/releases/20261123172257900-6344de/` e `onboarding-only-receipt.json`. Copia locale degli script, manifesti, checksum e ricevuta in `/private/tmp/onboarding-layout-20261123/`. Questi percorsi non contengono materiale da pubblicare in Git; il repository conserva soltanto questo resoconto senza segreti.
