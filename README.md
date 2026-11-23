@@ -51,7 +51,7 @@ Unmatt integra solo API HTTP e redirect: non installa il kit né importa codice 
 - Studio con siti, avatar, voci, contesto, origini consentite e percorsi JSON versionati.
 - Quattro renderer condivisi: editoriale 2D, ritratto 2.5D, personaggio 3D e host fotografico beta. Cinque identità e nove combinazioni supportate: i due nuovi ritratti fotografici Studio sono disponibili nel 2.5D; il catalogo e il server impediscono combinazioni prive di asset. Labiale e audio in streaming tramite Inworld.
 - Microfono WebRTC con turni automatici e interruzione della voce dell’avatar; trascrizione OpenAI, estrazione delle risposte con schema strutturato e validazione server. Campi e testo disponibili anche senza microfono.
-- Percorso vocale con domanda visibile, sottotitoli testuali, stati di ascolto/risposta, pausa, passaggio alla scrittura e riepilogo modificabile. La webcam non fa parte del percorso cliente.
+- Percorso vocale con domanda visibile, sottotitoli testuali, stati di ascolto/risposta, pausa, passaggio alla scrittura e riepilogo modificabile. Se la riproduzione dell’avatar fallisce, il microfono viene chiuso e il percorso passa alla scrittura, mantenendo le risposte; «Passa alla voce» avvia un nuovo tentativo esplicito. La webcam non fa parte del percorso cliente.
 - Il microfono si attiva dopo il consenso e un'azione esplicita del cliente; il browser può chiedere il relativo permesso. Importi e campi marcati `confirmSpoken` richiedono conferma quando interpretati dalla conversazione.
 - Domande condizionali, correzioni, campi facoltativi, riepilogo, conferma esplicita, ripresa autorizzata e isolamento tra siti/clienti.
 - AIHat riceve una bozza nei propri riepiloghi: conserva scoring, salvataggio, generazione e conferma specifica del portafoglio interamente azionario.
@@ -110,3 +110,7 @@ La scheda **04 Integrazione** mostra il percorso sito → Conclavia → server d
 [Verifica del 26 settembre 2026](docs/verification-2026-09-26.md): prove automatiche, limiti del collaudo e stato distinto dell’integrazione pubblica Umatt.
 
 Lo Studio salva avatar, contesto, percorsi e ritorni anche alla prima creazione del cliente e permette di rigenerare la chiave API. Il percorso registra ora un abbandono esplicito distinto dalla pausa; il sito verifica successo/abbandono attraverso le API autenticate. [Configurazione, chiavi ed esiti](docs/integration.md#configurare-il-cliente-e-gestire-la-chiave-api).
+
+## Errori della voce e stato del provider
+
+Il controllo dei flag e il healthcheck non attestano credito o sintesi audio. Il 23 novembre 2026 il provider Inworld di produzione ha restituito `402` per credito insufficiente anche su una frase sintetica: serve ripristinare il credito dell’account, senza cambiare provider, chiavi o voce. Il messaggio al cliente distingue il guasto della riproduzione dal microfono. [Diagnosi, correzione e verifiche](docs/voice-failure-2026-11-23.md).

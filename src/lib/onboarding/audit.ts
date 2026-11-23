@@ -6,7 +6,7 @@ import { InputError, record } from './validation';
 import type { Interpretation, Session, SessionView } from './types';
 
 export const clientAuditEvents = ['transcript_held', 'voice_error', 'voice_started', 'voice_paused', 'voice_resumed', 'voice_stopped', 'voice_command'] as const;
-export const clientAuditReasons = ['context_changed', 'request_failed', 'recognition_failed', 'pause_command', 'repeat_command', 'resume_command',
+export const clientAuditReasons = ['context_changed', 'request_failed', 'recognition_failed', 'playback_failed', 'pause_command', 'repeat_command', 'resume_command',
   'user_action', 'mode_changed', 'session_completed', 'review_started', 'idle_timeout', 'session_expired', 'permission_denied', 'connection_failed'] as const;
 export type ClientAuditInput = {
   event: typeof clientAuditEvents[number]; text?: string; questionId?: string; previousQuestionId?: string; revision?: number;

@@ -150,7 +150,11 @@ export function SessionRoom({ id }: { id: string }) {
         onStart: () => { if (mounted.current && !controller.signal.aborted) { setPreparing(false); setSpeaking(true); } },
       });
     } catch {
-      if (!controller.signal.aborted && mounted.current) setError(words().voiceError);
+      if (!controller.signal.aborted && mounted.current && speech.current === controller) {
+        audit('voice_error', 'playback_failed');
+        switchToText();
+        setError(words().playbackError);
+      }
     } finally {
       if (speech.current === controller && mounted.current) { setPreparing(false); setSpeaking(false); setFrame(rest); }
     }
@@ -297,7 +301,7 @@ export function SessionRoom({ id }: { id: string }) {
   // The fixed question already captions that sentence. Keep only the additional speech below it.
   const caption = spokenText.startsWith(session.flow.introduction) ? spokenText.slice(session.flow.introduction.length).trim() : spokenText;
   const subtitle = field && caption.endsWith(field.title) ? caption.slice(0, -field.title.length).trim() : caption;
-  const status = reviewing ? c.reviewing : paused ? c.paused : busy ? c.thinking : connecting || preparing ? c.preparing :
+  const status = reviewing ? c.reviewing : mode === 'text' ? c.writing : paused ? c.paused : busy ? c.thinking : connecting || preparing ? c.preparing :
     speaking ? c.speaking : hearing ? c.hearing : live ? c.listening : c.ready;
   const returnToSite = outcomeUrl(session);
   const avatar = <BusinessAvatar language={locale} appearance={session.avatar.appearance} visualStyle={session.avatar.visualStyle} mood="friendly"

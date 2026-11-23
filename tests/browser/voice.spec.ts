@@ -227,11 +227,45 @@ test('reload requires a gesture before opening the microphone and mobile English
   await page.screenshot({ path: 'test-results/voice-mobile-en.png', fullPage: true });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
-test('voice provider failure leaves the question readable and the microphone usable', async ({ page }) => {
-  await setup(page, { failVoice: true }); await start(page);
-  await expect(page.locator('main').getByRole('alert')).toContainText('La voce non è disponibile');
-  await expect(page.getByRole('heading', { name: 'Quanto è stabile il tuo reddito?' })).toBeVisible();
-  await expect(page.locator('main').getByRole('alert')).not.toContainText('provider');
+for (const locale of ['it', 'en'] as const) {
+  test(`failed avatar playback stops the microphone, offers typing and allows an explicit retry (${locale})`, async ({ page }) => {
+    if (locale === 'en') await page.setViewportSize({ width: 390, height: 844 });
+    const options = { locale, failVoice: true };
+    const app = await setup(page, options);
+    await page.getByRole('button', { name: locale === 'it' ? 'Inizia a parlare' : 'Start speaking', exact: true }).click();
+    const alert = page.locator('main').getByRole('alert');
+    await expect(alert).toContainText(locale === 'it' ? 'Il microfono è stato fermato' : 'Your microphone has been stopped');
+    await expect(alert).not.toContainText('provider');
+    await expect(page.getByRole('status', { includeHidden: true })).toHaveText(locale === 'it' ? 'Rispondi scrivendo' : 'Continue by typing');
+    expect(await page.evaluate(() => (window as Window & { micTrack?: MediaStreamTrack }).micTrack?.readyState)).toBe('ended');
+    await expect(page.getByRole('button', { name: locale === 'it' ? 'Stabile' : 'Stable', exact: true })).toBeVisible();
+    expect(app.state().answers).toEqual({});
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await page.screenshot({ path: `test-results/playback-fallback-${locale}.png`, fullPage: true });
+    await page.getByRole('button', { name: locale === 'it' ? 'Stabile' : 'Stable', exact: true }).click();
+    await page.getByRole('button', { name: locale === 'it' ? 'Conferma risposta' : 'Confirm answer' }).click();
+    await expect(page.getByRole('spinbutton')).toBeVisible();
+    options.failVoice = false;
+    await page.getByRole('button', { name: locale === 'it' ? 'Passa alla voce' : 'Switch to voice', exact: true }).click();
+    await expect(page.getByRole('status')).toHaveText(locale === 'it' ? 'Sto parlando' : 'Speaking');
+    await expect(alert).toHaveCount(0);
+    expect(app.state().answers).toEqual({ income: 'stable' });
+    expect(await page.evaluate(() => (window as Window & { micTrack?: MediaStreamTrack }).micTrack?.readyState)).toBe('live');
+  });
+}
+
+test('a later playback failure preserves saved answers and stops further voice turns', async ({ page }) => {
+  const options = { failVoice: false };
+  const app = await setup(page, options); await start(page);
+  options.failVoice = true;
+  await speak(page, 'stabile');
+  await expect(page.getByRole('heading', { name: 'Quale capitale vuoi destinare?' })).toBeVisible();
+  await expect(page.locator('main').getByRole('alert')).toContainText('Il microfono è stato fermato');
+  expect(app.state().answers).toEqual({ income: 'stable' });
+  expect(await page.evaluate(() => (window as Window & { micTrack?: MediaStreamTrack }).micTrack?.readyState)).toBe('ended');
+  await speak(page, 'quindicimila');
+  expect(app.calls.filter(call => call === 'turn')).toHaveLength(1);
+  expect(app.state().answers).toEqual({ income: 'stable' });
 });
 
 test('a new typed draft survives the delayed response to the previous message', async ({ page }) => {

@@ -17,6 +17,7 @@ function session(): Session {
 function view(s: Session): SessionView { return publicSession({ ...s, revision: s.revision + 1 }); }
 
 test('client telemetry allows held transcripts and old/new context but cannot forge server identity or metadata', () => {
+  assert.equal(parseClientAudit({ event: 'voice_error', reason: 'playback_failed' }).reason, 'playback_failed');
   const parsed = parseClientAudit({ event: 'transcript_held', text: 'Seimila', questionId: 'new', previousQuestionId: 'old', revision: 1, reason: 'context_changed' });
   const s = session(), event = buildClientAudit(s, parsed);
   assert.equal(event.source, 'client'); assert.equal(event.siteId, s.siteId); assert.equal(event.revisionBefore, 3);
