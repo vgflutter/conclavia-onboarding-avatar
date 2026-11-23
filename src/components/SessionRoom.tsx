@@ -324,7 +324,7 @@ export function SessionRoom({ id }: { id: string }) {
     </section> : session.status === 'completed' ? <section className={styles.welcome}>
       <div className={styles.doneIcon}>✓</div><div className={styles.eyebrow}>{c.finish}</div><h1>{c.finished}</h1>
       <p>{c.finishedHint}</p><a className={styles.primary} href={returnToSite} target="_top">{c.continue} {session.siteName} →</a>
-    </section> : <div className={styles.content} data-voice-layout={!reviewing && mode === 'voice'} data-voice-dock={!reviewing && !heldTranscript && mode === 'voice' && !options && !edit}>
+    </section> : <div className={styles.content} data-conversation-layout={!reviewing} data-voice-dock={!reviewing && !heldTranscript && mode === 'voice' && !options && !edit}>
       <div className={styles.progressRow}><span>{reviewing ? c.reviewing : c.step + ' ' + (questions.indexOf(field!) + 1) + ' ' + c.of + ' ' + questions.length}</span>
         <span>{answered} / {questions.length}</span></div>
       <div className={styles.progress} role="progressbar" aria-label={c.progress} aria-valuenow={answered} aria-valuemin={0} aria-valuemax={questions.length}>
@@ -377,7 +377,7 @@ export function SessionRoom({ id }: { id: string }) {
             submit={(value, skip) => act('answer', { questionId: field.id, value, skip })} cancel={edit ? () => setEdit('') : undefined} />
         </div>}
         {!reviewing && mode === 'text' && !edit && <div className={styles.textConversation}>
-          <p aria-live="polite">{busy ? c.thinking : session.messages.at(-1)?.text}</p>
+          {(busy || subtitle) && <p aria-live="polite">{busy ? c.thinking : subtitle}</p>}
           <form onSubmit={async e => {
             e.preventDefault();
             const submitted = utterance;

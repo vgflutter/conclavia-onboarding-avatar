@@ -257,10 +257,16 @@ for (const locale of ['it', 'en'] as const) {
 test('a later playback failure preserves saved answers and stops further voice turns', async ({ page }) => {
   const options = { failVoice: false };
   const app = await setup(page, options); await start(page);
+  const avatar = page.locator('section[data-mode] > div > div').first();
+  const before = await avatar.boundingBox();
   options.failVoice = true;
   await speak(page, 'stabile');
   await expect(page.getByRole('heading', { name: 'Quale capitale vuoi destinare?' })).toBeVisible();
   await expect(page.locator('main').getByRole('alert')).toContainText('Il microfono è stato fermato');
+  const after = await avatar.boundingBox();
+  expect(after?.width).toBeCloseTo(before?.width ?? 0, 0);
+  const question = await page.getByRole('heading', { name: 'Quale capitale vuoi destinare?' }).boundingBox();
+  expect(question?.x).toBeGreaterThan((after?.x ?? 0) + (after?.width ?? 0));
   expect(app.state().answers).toEqual({ income: 'stable' });
   expect(await page.evaluate(() => (window as Window & { micTrack?: MediaStreamTrack }).micTrack?.readyState)).toBe('ended');
   await speak(page, 'quindicimila');

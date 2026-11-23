@@ -58,3 +58,14 @@ Controlli del deployer: 69 Node, 66 Python e test Caddy nativo superati. Dopo l�
 Chrome sul dominio reale `https://onboarding.conclavia.me`: desktop 1440×900 e mobile 390×844 superati, incluse apertura delle opzioni, domanda e comandi visibili, nessun overflow orizzontale o errore JavaScript. Avatar misurato a 580 px su desktop e 351 px su mobile. Le API di sessione e l’audio sono simulati nel browser: nessuna sessione cliente creata, nessuna chiamata ai provider. Il credito Inworld non è stato ricaricato e la voce reale non è certificata da questi controlli.
 
 Bundle e ricevuta sul VPS: `/opt/conclavia/releases/20261123172257900-6344de/` e `onboarding-only-receipt.json`. Copia locale degli script, manifesti, checksum e ricevuta in `/private/tmp/onboarding-layout-20261123/`. Questi percorsi non contengono materiale da pubblicare in Git; il repository conserva soltanto questo resoconto senza segreti.
+
+
+## Correzione del layout durante la scrittura
+
+La successiva schermata dell’utente mostrava il fallback testuale: il primo rilascio applicava la griglia ampia alla sola modalità vocale. Quando Inworld falliva e il client passava alla scrittura, l’avatar tornava a 96 px su desktop e il questionario occupava una colonna verticale.
+
+Il layout condiviso ora si applica a tutti i passaggi in corso, sia a voce sia scrivendo, compresi accesso manuale e ripresa. Su desktop l’avatar mantiene la stessa dimensione dopo l’errore, con domanda e risposte affiancate. Le quattro scelte dello screenshot stanno in due colonne; titolo, descrizione e avviso hanno proporzioni compatte. Il messaggio dell’assistente sotto le opzioni mostra soltanto il testo aggiuntivo, senza ripetere la domanda già visibile. L’avviso IT/EN è più breve e continua a spiegare che il microfono è stato fermato.
+
+Il caso di regressione della riproduzione fallita controlla anche che l’avatar desktop mantenga la dimensione e resti accanto al questionario. Collaudi visivi con quattro opzioni e descrizione, in italiano/inglese, su desktop 1304×728 (caso dello screenshot), 1440×900, 1280×720 e telefoni 390×844/375×667, più avvio scritto manuale e ripresa. Screenshot e artefatti in `/private/tmp/onboarding-text-layout-20261123/`.
+
+Immagine candidata con lo stesso kit di produzione: `conclavia-onboarding:text-layout-20261123`, digest `sha256:d54e725666a643c679c574b98d97cad38fdbf2ea7b7358f9939d3f848076a0ef`. Build, 82 unit test, lint e TypeScript passati; sull’immagine definitiva passano tutte le 15 regressioni vocali (compresa la dimensione dell’avatar dopo il guasto) e i sette scenari visivi/scritti. Rilascio in preparazione dopo la conferma dell’utente di aver interrotto il nuovo percorso. Il credito Inworld e i dati dei questionari rimangono invariati.
